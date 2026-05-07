@@ -146,6 +146,12 @@ export default function Gastos() {
               setIsDetalleModalOpen(true);
             }
           }}
+          events={{
+            rowClick: (e, row) => {
+              setGastoDetalle(row.getData());
+              setIsDetalleModalOpen(true);
+            }
+          }}
         />
       </div>
 
