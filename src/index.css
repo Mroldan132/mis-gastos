@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #0F172A; /* Fondo oscuro por defecto */
+  color: white;
+}
+
+/* ==================================================== */
+/* HACK DE ESTILOS: TABULATOR NEOBRUTALISTA             */
+/* ==================================================== */
+
+/* 1. Contenedor principal de la tabla */
+.tabulator {
+  background-color: #0F172A !important; 
+  border: 4px solid #8B5CF6 !important; /* Borde morado grueso */
+  border-radius: 0px !important; /* Cero curvas, puro neobrutalismo */
+  color: #fff !important;
+  font-family: inherit !important; /* Usa la misma fuente de la app */
+}
+
+/* 2. Cabecera de las columnas */
+.tabulator-header {
+  background-color: #8B5CF6 !important; /* Fondo morado vibrante */
+  color: #fff !important;
+  font-weight: 900 !important;
+  text-transform: uppercase !important;
+  border-bottom: 4px solid #0F172A !important;
+}
+
+.tabulator-col {
+  background-color: transparent !important;
+  border-right: 2px solid #0F172A !important;
+}
+
+/* 3. Filas y colores alternos */
+.tabulator-row {
+  background-color: #1E293B !important; /* Color slate-800 */
+  border-bottom: 2px solid #0F172A !important;
+  transition: all 0.2s ease-in-out;
+}
+
+.tabulator-row.tabulator-row-even {
+  background-color: #0F172A !important; /* Intercalado más oscuro */
+}
+
+/* 4. Efecto Hover al pasar el mouse (Corregido) */
+.tabulator-row:hover {
+  background-color: #10B981 !important; 
+  color: #0F172A !important; 
+  /* Cambiamos el zoom por un movimiento sutil hacia arriba para no alterar el ancho */
+  transform: translateY(-2px); 
+  z-index: 10;
+  box-shadow: 0px 4px 15px rgba(16, 185, 129, 0.4);
+}
+
+/* 5. Footer y Paginación */
+.tabulator-footer {
+  background-color: #1E293B !important;
+  border-top: 4px solid #8B5CF6 !important;
+}
+
+.tabulator-page {
+  background-color: #0F172A !important;
+  border: 2px solid #8B5CF6 !important;
+  color: #fff !important;
+  border-radius: 0px !important;
+  margin: 0 4px !important;
+  font-weight: bold !important;
+}
+
+.tabulator-page.active {
+  background-color: #8B5CF6 !important;
+  color: #fff !important;
+}
+/* ==================================================== */
+/* ESTILOS DEL SCROLLBAR (Para que no tape la tabla)    */
+/* ==================================================== */
+
+.tabulator-tableholder::-webkit-scrollbar {
+  height: 10px; /* Scroll horizontal más delgado */
+  width: 10px;  /* Scroll vertical más delgado */
+}
+
+.tabulator-tableholder::-webkit-scrollbar-track {
+  background: #0F172A; /* Fondo oscuro */
+  border-top: 2px solid #8B5CF6; /* Línea morada para separar */
+}
+
+.tabulator-tableholder::-webkit-scrollbar-thumb {
+  background: #8B5CF6; /* Color del "agarre" */
+  border-radius: 0px; /* Cuadrado para mantener el neobrutalismo */
+}
+
+.tabulator-tableholder::-webkit-scrollbar-thumb:hover {
+  background: #10B981; /* Se vuelve verde al pasarle el mouse */
+}
