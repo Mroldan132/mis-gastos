@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="256" height="256">
+  <defs>
+    <linearGradient id="hogarGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF6B6B" />
+      <stop offset="100%" stop-color="#845EC2" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#845EC2" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+  
+  <rect width="80" height="80" x="10" y="10" rx="20" fill="url(#hogarGradient)" filter="url(#glow)"/>
+  
+  <path d="M28 52 v20 h14 v-14 h16 v14 h14 v-20 L50 32 Z" fill="#FFFFFF" opacity="0.95"/>
+</svg>
