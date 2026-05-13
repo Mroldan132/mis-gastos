@@ -21,7 +21,7 @@ export default function Gastos() {
   const [moneda, setMoneda] = useState('PEN');
   const [tasaManual, setTasaManual] = useState(3.75);
 
-  // --- NUEVO ESTADO: Modal de Detalle de Gasto ---
+  // Estados para Modal de Detalle de Gasto
   const [isDetalleModalOpen, setIsDetalleModalOpen] = useState(false);
   const [gastoDetalle, setGastoDetalle] = useState(null);
 
@@ -40,40 +40,52 @@ export default function Gastos() {
     } catch (error) { console.error("Error cargando gastos:", error); }
   };
 
-  useEffect(() => { fetchGastos(); }, [filtroAnio, filtroMes]);
+  useEffect(() => { 
+    fetchGastos(); 
+    
+    // Obtener el tipo de cambio del día automáticamente al cargar
+    fetch('https://open.er-api.com/v6/latest/USD')
+      .then(res => res.json())
+      .then(data => {
+        if (data?.rates?.PEN) {
+          setTasaManual(data.rates.PEN);
+        }
+      })
+      .catch(err => console.error("Error obteniendo tipo de cambio:", err));
 
-const handleCrearGasto = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-  try {
-    const response = await apiGastos.post('/gastos', {
-      UserId: localStorage.getItem('userId'),
-      Monto: parseFloat(nuevoMonto),
-      Categoria: nuevaCategoria,
-      Comercio: nuevoComercio,
-      EsPagoDeCuota: false,
-      CuotaIdRelacionada: "",
-      Moneda: moneda,
-      TipoCambio: moneda === 'USD' ? parseFloat(tasaManual) : 1
-    });
+  }, [filtroAnio, filtroMes]);
 
-    if (response.data.Success) {
-      setIsModalOpen(false);
-      setNuevoMonto('');
-      setNuevoComercio('');
-      setMoneda('PEN'); // Reset a soles
-      fetchGastos();
+  const handleCrearGasto = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const response = await apiGastos.post('/gastos', {
+        UserId: localStorage.getItem('userId'),
+        Monto: parseFloat(nuevoMonto),
+        Categoria: nuevaCategoria,
+        Comercio: nuevoComercio,
+        EsPagoDeCuota: false,
+        CuotaIdRelacionada: "",
+        Moneda: moneda,
+        TipoCambio: moneda === 'USD' ? parseFloat(tasaManual) : 1
+      });
+
+      if (response.data.Success) {
+        setIsModalOpen(false);
+        setNuevoMonto('');
+        setNuevoComercio('');
+        setMoneda('PEN'); // Reset a soles
+        fetchGastos();
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    console.error(error);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
-  // Función modificada para recibir directamente los datos de la fila
   const abrirModalFraccionar = (rowData) => {
-    setIsDetalleModalOpen(false); // Cerramos el detalle si estaba abierto
+    setIsDetalleModalOpen(false);
     setGastoSeleccionado(rowData);
     setCantidadCuotas('');
     setIsFraccionarModalOpen(true);
@@ -95,17 +107,29 @@ const handleCrearGasto = async (e) => {
     } catch (error) { console.error(error); } finally { setFraccionarLoading(false); }
   };
 
-  // Función para formatear fechas
   const formatFecha = (valor) => {
     if (!valor) return "";
     const fecha = new Date(valor.includes("T") ? valor : `${valor}T00:00:00`);
     return isNaN(fecha) ? valor : fecha.toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
-  // COLUMNAS REORDENADAS: Comercio va primero
   const columns = [
     { title: "Comercio", field: "Comercio", widthGrow: 2, cssClass: "font-bold cursor-pointer" },
-    { title: "Monto", field: "Monto", formatter: "money", formatterParams: { symbol: "S/ " }, hozAlign: "right", cssClass: "cursor-pointer" },
+    { 
+      title: "Monto", 
+      field: "Monto", 
+      hozAlign: "right", 
+      cssClass: "cursor-pointer",
+      formatter: (cell) => {
+        const data = cell.getRow().getData();
+        const monto = parseFloat(data.Monto);
+        // Indicador visual simple de moneda
+        if (data.Moneda === 'USD') {
+          return `<span class="text-green-400 font-black text-sm">$ ${monto.toFixed(2)}</span>`;
+        }
+        return `<span class="text-white font-black text-sm">S/ ${monto.toFixed(2)}</span>`;
+      }
+    },
     { title: "Fecha", field: "FechaOperacion", width: 160, formatter: (cell) => formatFecha(cell.getValue()), cssClass: "cursor-pointer" },
     { title: "Categoría", field: "Categoria", cssClass: "cursor-pointer" },
     { 
@@ -149,13 +173,9 @@ const handleCrearGasto = async (e) => {
           options={{ 
             pagination: "local", 
             paginationSize: 10, 
-            rowFormatter: (row) => { if(row.getData().EsGastoReferencia) row.getElement().style.opacity = "0.4"; },
-            // MAGIA: Al hacer clic en cualquier fila, abrimos el Detalle
-            rowClick: (e, row) => {
-              setGastoDetalle(row.getData());
-              setIsDetalleModalOpen(true);
-            }
+            rowFormatter: (row) => { if(row.getData().EsGastoReferencia) row.getElement().style.opacity = "0.4"; }
           }}
+          // El click de la fila separado para que funcione bien
           events={{
             rowClick: (e, row) => {
               setGastoDetalle(row.getData());
@@ -165,7 +185,7 @@ const handleCrearGasto = async (e) => {
         />
       </div>
 
-      {/* --- 1. MODAL DE DETALLE DEL GASTO (NUEVO) --- */}
+      {/* --- 1. MODAL DE DETALLE DEL GASTO --- */}
       {isDetalleModalOpen && gastoDetalle && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-slate-900 border-4 border-white p-6 max-w-sm w-full shadow-[12px_12px_0px_0px_rgba(255,255,255,1)] relative animate-fade-in">
@@ -179,7 +199,9 @@ const handleCrearGasto = async (e) => {
             <div className="flex flex-col gap-4 mb-8">
               <div className="bg-slate-800 p-4 border-l-4 border-acento-neobrutal flex justify-between items-center">
                 <span className="text-sm text-gray-400 font-bold uppercase">Monto</span>
-                <span className="text-3xl font-black text-white">S/ {gastoDetalle.Monto.toFixed(2)}</span>
+                <span className={`text-3xl font-black ${gastoDetalle.Moneda === 'USD' ? 'text-green-400' : 'text-white'}`}>
+                  {gastoDetalle.Moneda === 'USD' ? '$' : 'S/'} {gastoDetalle.Monto.toFixed(2)}
+                </span>
               </div>
               
               <div className="grid grid-cols-2 gap-4">
@@ -194,7 +216,6 @@ const handleCrearGasto = async (e) => {
               </div>
             </div>
 
-            {/* Si el gasto se puede fraccionar, mostramos el botón aquí adentro */}
             {(!gastoDetalle.EsGastoReferencia && !gastoDetalle.EsPagoDeCuota) ? (
               <button 
                 onClick={() => abrirModalFraccionar(gastoDetalle)}
@@ -218,54 +239,61 @@ const handleCrearGasto = async (e) => {
             <button onClick={() => setIsModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white font-black text-xl">✕</button>
             <h2 className="text-3xl font-extrabold text-white mb-6 uppercase tracking-tight">Registrar Gasto</h2>
             <form onSubmit={handleCrearGasto} className="flex flex-col gap-5">
+              
               <div>
                 <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Comercio</label>
                 <input type="text" value={nuevoComercio} onChange={(e) => setNuevoComercio(e.target.value)} className="w-full bg-slate-800 border-2 border-gray-600 focus:border-acento-neobrutal text-white px-4 py-3 outline-none" required />
               </div>
+
+              {/* FILA 1: MONEDA Y MONTO */}
               <div className="flex gap-4">
-                  <div className="w-1/3">
-                    <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Moneda</label>
-                    <select 
-                      value={moneda} 
-                      onChange={(e) => setMoneda(e.target.value)}
-                      className="w-full bg-slate-800 border-2 border-gray-600 focus:border-acento-neobrutal text-white px-4 py-3 outline-none appearance-none cursor-pointer"
-                    >
-                      <option value="PEN">Soles</option>
-                      <option value="USD">Dólares</option>
-                    </select>
-                  </div>
-                  {moneda === 'USD' && (
-                    <div className="animate-slide-down">
-                      <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Tipo de Cambio Aplicado</label>
-                      <input 
-                        type="number" 
-                        step="0.001" 
-                        value={tasaManual} 
-                        onChange={(e) => setTasaManual(e.target.value)} 
-                        className="w-full bg-slate-800 border-2 border-brillo-primario text-white px-4 py-3 outline-none font-black text-xl text-center" 
-                        required 
-                      />
-                      <p className="text-[10px] text-brillo-primario font-bold mt-1 uppercase text-center">Sugerido por la API de mercado</p>
-                    </div>
-                  )}
-                  <div className="flex-1">
-                    <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Monto</label>
-                    <input 
-                      type="number" 
-                      step="0.01" 
-                      value={nuevoMonto} 
-                      onChange={(e) => setNuevoMonto(e.target.value)} 
-                      className="w-full bg-slate-800 border-2 border-gray-600 focus:border-acento-neobrutal text-white px-4 py-3 outline-none" 
-                      required 
-                    />
-                  </div>
+                <div className="w-1/3">
+                  <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Moneda</label>
+                  <select 
+                    value={moneda} 
+                    onChange={(e) => setMoneda(e.target.value)}
+                    className="w-full bg-slate-800 border-2 border-gray-600 focus:border-acento-neobrutal text-white px-4 py-3 outline-none appearance-none cursor-pointer"
+                  >
+                    <option value="PEN">Soles</option>
+                    <option value="USD">Dólares</option>
+                  </select>
                 </div>
+                <div className="flex-1">
+                  <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Monto</label>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    value={nuevoMonto} 
+                    onChange={(e) => setNuevoMonto(e.target.value)} 
+                    className="w-full bg-slate-800 border-2 border-gray-600 focus:border-acento-neobrutal text-white px-4 py-3 outline-none" 
+                    required 
+                  />
+                </div>
+              </div>
+
+              {/* FILA 2: TIPO DE CAMBIO (Aparece abajo si es USD para no aplastar en celular) */}
+              {moneda === 'USD' && (
+                <div className="animate-slide-down">
+                  <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Tipo de Cambio Aplicado</label>
+                  <input 
+                    type="number" 
+                    step="0.001" 
+                    value={tasaManual} 
+                    onChange={(e) => setTasaManual(e.target.value)} 
+                    className="w-full bg-slate-800 border-2 border-brillo-primario text-white px-4 py-3 outline-none font-black text-xl text-center shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] focus:shadow-[4px_4px_0px_0px_rgba(139,92,246,1)]" 
+                    required 
+                  />
+                  <p className="text-[10px] text-brillo-primario font-bold mt-1 uppercase text-center">Sugerido por la API de mercado</p>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Categoría</label>
                 <select value={nuevaCategoria} onChange={(e) => setNuevaCategoria(e.target.value)} className="w-full bg-slate-800 border-2 border-gray-600 focus:border-acento-neobrutal text-white px-4 py-3 outline-none">
                   <option value="Comida">Comida</option><option value="Transporte">Transporte</option><option value="Servicios">Servicios</option><option value="Hogar">Hogar</option><option value="Entretenimiento">Entretenimiento</option><option value="Salud">Salud</option><option value="Tecnología">Tecnología</option><option value="Otros">Otros</option>
                 </select>
               </div>
+
               <button type="submit" disabled={loading} className="mt-4 w-full bg-acento-neobrutal text-slate-900 font-extrabold text-lg py-4 border-4 border-transparent hover:border-white hover:-translate-y-1 transition-all shadow-[6px_6px_0px_0px_rgba(255,255,255,1)]">
                 {loading ? 'GUARDANDO...' : 'GUARDAR GASTO'}
               </button>
@@ -280,11 +308,11 @@ const handleCrearGasto = async (e) => {
           <div className="bg-slate-900 border-4 border-brillo-primario p-8 max-w-md w-full shadow-[12px_12px_0px_0px_rgba(139,92,246,1)] relative">
             <button onClick={() => setIsFraccionarModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white font-black text-xl">✕</button>
             <h2 className="text-3xl font-extrabold text-white mb-2 uppercase tracking-tight">Fraccionar Gasto</h2>
-            <p className="text-gray-400 mb-6 font-bold text-sm">Dividirás "{gastoSeleccionado.Comercio}" de S/ {gastoSeleccionado.Monto}.</p>
+            <p className="text-gray-400 mb-6 font-bold text-sm">Dividirás "{gastoSeleccionado.Comercio}" de {gastoSeleccionado.Moneda === 'USD' ? '$' : 'S/'} {gastoSeleccionado.Monto}.</p>
             <form onSubmit={confirmarFraccionamiento} className="flex flex-col gap-5">
               <div>
                 <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">¿En cuántas cuotas?</label>
-                <input type="number" min="2" max="36" value={cantidadCuotas} onChange={(e) => setCantidadCuotas(e.target.value)} className="w-full bg-slate-800 border-2 border-brillo-primario text-white px-4 py-3 outline-none text-2xl font-black text-center" required />
+                <input type="number" min="2" max="36" value={cantidadCuotas} onChange={(e) => setCantidadCuotas(e.target.value)} className="w-full bg-slate-800 border-2 border-brillo-primario text-white px-4 py-3 outline-none text-2xl font-black text-center shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] focus:shadow-[4px_4px_0px_0px_rgba(139,92,246,1)]" required />
               </div>
               <button type="submit" disabled={fraccionarLoading} className="mt-4 w-full bg-brillo-primario text-white font-extrabold text-lg py-4 border-4 border-transparent hover:border-white hover:-translate-y-1 transition-all shadow-[6px_6px_0px_0px_rgba(255,255,255,1)]">
                 {fraccionarLoading ? 'PROCESANDO...' : 'CONFIRMAR CUOTAS'}
