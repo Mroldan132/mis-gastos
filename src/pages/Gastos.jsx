@@ -18,6 +18,8 @@ export default function Gastos() {
   const [nuevoMonto, setNuevoMonto] = useState('');
   const [nuevaCategoria, setNuevaCategoria] = useState('Comida');
   const [nuevoComercio, setNuevoComercio] = useState('');
+  const [moneda, setMoneda] = useState('PEN');
+  const [tasaManual, setTasaManual] = useState(3.75);
 
   // --- NUEVO ESTADO: Modal de Detalle de Gasto ---
   const [isDetalleModalOpen, setIsDetalleModalOpen] = useState(false);
@@ -40,26 +42,34 @@ export default function Gastos() {
 
   useEffect(() => { fetchGastos(); }, [filtroAnio, filtroMes]);
 
-  const handleCrearGasto = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const response = await apiGastos.post('/gastos', {
-        UserId: localStorage.getItem('userId'),
-        Monto: parseFloat(nuevoMonto),
-        Categoria: nuevaCategoria,
-        Comercio: nuevoComercio,
-        EsPagoDeCuota: false,
-        CuotaIdRelacionada: ""
-      });
-      if (response.data.Success) {
-        setIsModalOpen(false);
-        setNuevoMonto('');
-        setNuevoComercio('');
-        fetchGastos();
-      }
-    } catch (error) { console.error(error); } finally { setLoading(false); }
-  };
+const handleCrearGasto = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+  try {
+    const response = await apiGastos.post('/gastos', {
+      UserId: localStorage.getItem('userId'),
+      Monto: parseFloat(nuevoMonto),
+      Categoria: nuevaCategoria,
+      Comercio: nuevoComercio,
+      EsPagoDeCuota: false,
+      CuotaIdRelacionada: "",
+      Moneda: moneda,
+      TipoCambio: moneda === 'USD' ? parseFloat(tasaManual) : 1
+    });
+
+    if (response.data.Success) {
+      setIsModalOpen(false);
+      setNuevoMonto('');
+      setNuevoComercio('');
+      setMoneda('PEN'); // Reset a soles
+      fetchGastos();
+    }
+  } catch (error) {
+    console.error(error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Función modificada para recibir directamente los datos de la fila
   const abrirModalFraccionar = (rowData) => {
@@ -212,10 +222,44 @@ export default function Gastos() {
                 <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Comercio</label>
                 <input type="text" value={nuevoComercio} onChange={(e) => setNuevoComercio(e.target.value)} className="w-full bg-slate-800 border-2 border-gray-600 focus:border-acento-neobrutal text-white px-4 py-3 outline-none" required />
               </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Monto (S/)</label>
-                <input type="number" step="0.01" value={nuevoMonto} onChange={(e) => setNuevoMonto(e.target.value)} className="w-full bg-slate-800 border-2 border-gray-600 focus:border-acento-neobrutal text-white px-4 py-3 outline-none" required />
-              </div>
+              <div className="flex gap-4">
+                  <div className="w-1/3">
+                    <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Moneda</label>
+                    <select 
+                      value={moneda} 
+                      onChange={(e) => setMoneda(e.target.value)}
+                      className="w-full bg-slate-800 border-2 border-gray-600 focus:border-acento-neobrutal text-white px-4 py-3 outline-none appearance-none cursor-pointer"
+                    >
+                      <option value="PEN">Soles</option>
+                      <option value="USD">Dólares</option>
+                    </select>
+                  </div>
+                  {moneda === 'USD' && (
+                    <div className="animate-slide-down">
+                      <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Tipo de Cambio Aplicado</label>
+                      <input 
+                        type="number" 
+                        step="0.001" 
+                        value={tasaManual} 
+                        onChange={(e) => setTasaManual(e.target.value)} 
+                        className="w-full bg-slate-800 border-2 border-brillo-primario text-white px-4 py-3 outline-none font-black text-xl text-center" 
+                        required 
+                      />
+                      <p className="text-[10px] text-brillo-primario font-bold mt-1 uppercase text-center">Sugerido por la API de mercado</p>
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Monto</label>
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      value={nuevoMonto} 
+                      onChange={(e) => setNuevoMonto(e.target.value)} 
+                      className="w-full bg-slate-800 border-2 border-gray-600 focus:border-acento-neobrutal text-white px-4 py-3 outline-none" 
+                      required 
+                    />
+                  </div>
+                </div>
               <div>
                 <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Categoría</label>
                 <select value={nuevaCategoria} onChange={(e) => setNuevaCategoria(e.target.value)} className="w-full bg-slate-800 border-2 border-gray-600 focus:border-acento-neobrutal text-white px-4 py-3 outline-none">
