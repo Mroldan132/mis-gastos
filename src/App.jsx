@@ -3,7 +3,8 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Gastos from './pages/Gastos';
 import Ingresos from './pages/Ingresos';
-import Cuotas from './pages/Cuotas'; // <-- Añade el import arriba
+import Cuotas from './pages/Cuotas'; 
+import Metas from "./pages/Metas";
 function App() {
   return (
     <Router>
@@ -14,7 +15,7 @@ function App() {
         <Route path="/gastos" element={<Gastos />} />
         <Route path="/ingresos" element={<Ingresos />} />
         <Route path="/cuotas" element={<Cuotas />} />
-        {/* La de ingresos será igual a la de gastos, la puedes clonar después */}
+        <Route path="/metas" element={<Metas />} />
       </Routes>
     </Router>
   );

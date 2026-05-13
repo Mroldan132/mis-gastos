@@ -5,6 +5,8 @@ const API_GASTOS_URL = 'https://49m99hfwm6.execute-api.us-east-2.amazonaws.com';
 const API_INGRESOS_URL = 'https://pp4091dt4e.execute-api.us-east-2.amazonaws.com';
 const API_DASHBOARD_URL = 'https://1vdl5vxqm6.execute-api.us-east-2.amazonaws.com';
 const API_CUOTAS_URL = 'https://m4ixixlyo9.execute-api.us-east-2.amazonaws.com';
+const API_METAS_URL = 'https://x3rfewotne.execute-api.us-east-2.amazonaws.com';
+
 
 // 2. Exportamos las instancias configuradas
 export const apiAuth = axios.create({ 
@@ -29,5 +31,10 @@ export const apiDashboard = axios.create({
 
 export const apiCuotas = axios.create({ 
     baseURL: API_CUOTAS_URL, 
+    headers: { 'Content-Type': 'application/json' } 
+});
+
+export const apiMetas = axios.create({ 
+    baseURL: API_METAS_URL, 
     headers: { 'Content-Type': 'application/json' } 
 });

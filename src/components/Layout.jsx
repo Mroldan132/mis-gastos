@@ -11,9 +11,10 @@ export default function Layout({ children }) {
 
   const navItems = [
     { name: 'Dashboard', path: '/dashboard', icon: '📊' },
-    { name: 'Gastos', path: '/gastos', icon: '💸' }, // Nombres cortos para el celular
+    { name: 'Gastos', path: '/gastos', icon: '💸' },
     { name: 'Ingresos', path: '/ingresos', icon: '💰' },
-    { name: 'Cuotas', path: '/cuotas', icon: '💳' } // <-- ¡ESTA ES LA NUEVA LÍNEA!
+    { name: 'Cuotas', path: '/cuotas', icon: '💳' } ,
+    { name: 'Metas', path: '/metas', icon: '🎯' }
   ];
 
   return (
