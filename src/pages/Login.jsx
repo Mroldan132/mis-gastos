@@ -15,18 +15,14 @@ export default function Login() {
     setError('');
 
     try {
-      // Ajusta la ruta '/login' si tu API Gateway tiene otra ruta configurada
       const response = await apiAuth.post('/login', {
         Email: email,
         Password: password
       });
 
       if (response.data.Success) {
-        // Guardamos el UserId y el Token en el navegador
         localStorage.setItem('token', response.data.Token);
         localStorage.setItem('userId', response.data.UserId);
-        
-        // ¡Magia! Lo enviamos al Dashboard
         navigate('/dashboard');
       } else {
         setError(response.data.Message || 'Credenciales incorrectas');
@@ -40,47 +36,49 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-fondo-oscuro flex items-center justify-center relative overflow-hidden font-sans">
+    <div className="min-h-screen bg-[#0b0f19] flex items-center justify-center relative overflow-hidden font-sans">
       
-      {/* Efecto Glow de fondo (Esfera borrosa) */}
-      <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-brillo-primario rounded-full mix-blend-screen filter blur-[128px] opacity-30"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-acento-neobrutal rounded-full mix-blend-screen filter blur-[128px] opacity-20"></div>
+      {/* Efecto Glow de fondo (Esfera borrosa) más sutil */}
+      <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-indigo-600 rounded-full mix-blend-screen filter blur-[128px] opacity-20"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-emerald-600 rounded-full mix-blend-screen filter blur-[128px] opacity-10"></div>
 
-      {/* Tarjeta Neobrutalista */}
-      <div className="z-10 w-full max-w-md bg-slate-900 border-4 border-brillo-primario p-8 rounded-2xl shadow-[8px_8px_0px_0px_rgba(139,92,246,1)]">
+      {/* Tarjeta Elegante */}
+      <div className="z-10 w-full max-w-md bg-slate-900/80 backdrop-blur-xl border border-gray-800 p-10 rounded-3xl shadow-2xl">
         
-        <h1 className="text-4xl font-extrabold text-white tracking-tight mb-2">
-          Hogar<span className="text-brillo-primario">App</span>
-        </h1>
-        <p className="text-gray-400 mb-8 font-medium">Control financiero inteligente.</p>
+        <div className="text-center mb-10">
+          <h1 className="text-4xl font-bold text-white tracking-tight mb-2">
+            Hogar<span className="text-indigo-500">App</span>
+          </h1>
+          <p className="text-gray-400 font-medium">Control financiero inteligente</p>
+        </div>
 
         <form onSubmit={handleLogin} className="flex flex-col gap-5">
           <div>
-            <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Correo Electrónico</label>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Correo Electrónico</label>
             <input 
               type="email" 
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-slate-800 border-2 border-gray-600 focus:border-acento-neobrutal text-white px-4 py-3 rounded-none outline-none transition-colors shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] focus:shadow-[4px_4px_0px_0px_rgba(16,185,129,1)]"
+              className="w-full bg-slate-950/50 border border-gray-700 text-white px-4 py-3 rounded-xl outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 shadow-inner"
               placeholder="tu@correo.com"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Contraseña</label>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Contraseña</label>
             <input 
               type="password" 
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-slate-800 border-2 border-gray-600 focus:border-acento-neobrutal text-white px-4 py-3 rounded-none outline-none transition-colors shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] focus:shadow-[4px_4px_0px_0px_rgba(16,185,129,1)]"
+              className="w-full bg-slate-950/50 border border-gray-700 text-white px-4 py-3 rounded-xl outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 shadow-inner"
               placeholder="••••••••"
               required
             />
           </div>
 
           {error && (
-            <div className="bg-red-500/20 border-2 border-red-500 text-red-400 px-4 py-2 font-bold text-sm">
+            <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl font-medium text-sm text-center">
               {error}
             </div>
           )}
@@ -88,9 +86,9 @@ export default function Login() {
           <button 
             type="submit" 
             disabled={loading}
-            className="mt-4 w-full bg-acento-neobrutal text-slate-900 font-extrabold text-lg py-4 border-4 border-transparent hover:border-white hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(255,255,255,1)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="mt-4 w-full bg-indigo-600 text-white font-medium text-lg py-3 rounded-xl shadow-lg shadow-indigo-500/25 hover:bg-indigo-500 transition-all active:translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'CONECTANDO...' : 'ENTRAR AL SISTEMA'}
+            {loading ? 'Conectando...' : 'Iniciar Sesión'}
           </button>
         </form>
       </div>

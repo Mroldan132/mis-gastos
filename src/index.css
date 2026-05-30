@@ -2,97 +2,265 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==================================================== */
+/* BASE                                                 */
+/* ==================================================== */
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
 body {
-  background-color: #0F172A; /* Fondo oscuro por defecto */
+  background-color: #0b0f19; /* Un tono oscuro más profundo y sofisticado */
+  color: #f8fafc;
+  font-family: inherit;
+  overflow-x: hidden;
+  /* Suavizado de fuentes para pantallas de alta resolución */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale; 
+}
+
+/* ==================================================== */
+/* SCROLLBAR GLOBAL                                     */
+/* ==================================================== */
+
+::-webkit-scrollbar {
+  width: 8px; /* Más delgado */
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* ==================================================== */
+/* TABLE STYLES - TANSTACK TABLE                        */
+/* ==================================================== */
+
+/* CONTENEDOR GENERAL */
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.08); /* Borde súper sutil */
+  border-radius: 16px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
+}
+
+/* TABLA */
+.table-modern {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 700px;
+}
+
+/* HEADER */
+.table-modern thead {
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.table-modern th {
+  padding: 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600; /* Menos agresivo que 900 */
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+/* ROWS */
+.table-modern tbody tr {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  transition: background-color 0.2s ease;
+}
+
+.table-modern tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03); /* Hover translúcido, sin scale() */
+}
+
+/* CELLS */
+.table-modern td {
+  padding: 16px;
+  vertical-align: middle;
+  color: #e2e8f0;
+  font-size: 14px;
+}
+
+.table-row-disabled {
+  opacity: 0.4;
+}
+
+/* ==================================================== */
+/* MOBILE CARDS                                         */
+/* ==================================================== */
+
+.mobile-card {
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 20px;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.mobile-card:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+  transform: translateY(-2px); /* Elevación suave */
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.mobile-card-disabled {
+  opacity: 0.5;
+}
+
+/* ==================================================== */
+/* BADGES                                               */
+/* ==================================================== */
+
+.badge-normal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  border-radius: 6px; /* Más corporativo que el fully-rounded */
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  color: #818cf8;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.badge-muted {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+/* ==================================================== */
+/* BUTTONS                                              */
+/* ==================================================== */
+
+.btn-primary {
+  background: #4f46e5; /* Índigo elegante */
   color: white;
+  font-weight: 500;
+  font-size: 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 14px 0 rgba(79, 70, 229, 0.25);
+  transition: all 0.2s ease;
+  padding: 10px 20px;
+}
+
+.btn-primary:hover {
+  background: #4338ca;
+  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.35);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  transform: translateY(1px);
 }
 
 /* ==================================================== */
-/* HACK DE ESTILOS: TABULATOR NEOBRUTALISTA             */
+/* INPUTS                                               */
 /* ==================================================== */
 
-/* 1. Contenedor principal de la tabla */
-.tabulator {
-  background-color: #0F172A !important; 
-  border: 4px solid #8B5CF6 !important; /* Borde morado grueso */
-  border-radius: 0px !important; /* Cero curvas, puro neobrutalismo */
-  color: #fff !important;
-  font-family: inherit !important; /* Usa la misma fuente de la app */
+.input-modern,
+.select-modern {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 12px 16px;
+  color: #f8fafc;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* 2. Cabecera de las columnas */
-.tabulator-header {
-  background-color: #8B5CF6 !important; /* Fondo morado vibrante */
-  color: #fff !important;
-  font-weight: 900 !important;
-  text-transform: uppercase !important;
-  border-bottom: 4px solid #0F172A !important;
+.input-modern:focus,
+.select-modern:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15); /* Anillo suave y brillante */
+  background: rgba(15, 23, 42, 0.9);
 }
 
-.tabulator-col {
-  background-color: transparent !important;
-  border-right: 2px solid #0F172A !important;
-}
-
-/* 3. Filas y colores alternos */
-.tabulator-row {
-  background-color: #1E293B !important; /* Color slate-800 */
-  border-bottom: 2px solid #0F172A !important;
-  transition: all 0.2s ease-in-out;
-}
-
-.tabulator-row.tabulator-row-even {
-  background-color: #0F172A !important; /* Intercalado más oscuro */
-}
-
-/* 4. Efecto Hover al pasar el mouse (Corregido) */
-.tabulator-row:hover {
-  background-color: #10B981 !important; 
-  color: #0F172A !important; 
-  /* Cambiamos el zoom por un movimiento sutil hacia arriba para no alterar el ancho */
-  transform: translateY(-2px); 
-  z-index: 10;
-  box-shadow: 0px 4px 15px rgba(16, 185, 129, 0.4);
-}
-
-/* 5. Footer y Paginación */
-.tabulator-footer {
-  background-color: #1E293B !important;
-  border-top: 4px solid #8B5CF6 !important;
-}
-
-.tabulator-page {
-  background-color: #0F172A !important;
-  border: 2px solid #8B5CF6 !important;
-  color: #fff !important;
-  border-radius: 0px !important;
-  margin: 0 4px !important;
-  font-weight: bold !important;
-}
-
-.tabulator-page.active {
-  background-color: #8B5CF6 !important;
-  color: #fff !important;
-}
 /* ==================================================== */
-/* ESTILOS DEL SCROLLBAR (Para que no tape la tabla)    */
+/* MODALS                                               */
 /* ==================================================== */
 
-.tabulator-tableholder::-webkit-scrollbar {
-  height: 10px; /* Scroll horizontal más delgado */
-  width: 10px;  /* Scroll vertical más delgado */
+.modal-modern {
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); /* Sombra muy amplia y suave */
 }
 
-.tabulator-tableholder::-webkit-scrollbar-track {
-  background: #0F172A; /* Fondo oscuro */
-  border-top: 2px solid #8B5CF6; /* Línea morada para separar */
+/* ==================================================== */
+/* ANIMATIONS                                           */
+/* ==================================================== */
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px); /* Entrada más sutil */
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0px);
+  }
 }
 
-.tabulator-tableholder::-webkit-scrollbar-thumb {
-  background: #8B5CF6; /* Color del "agarre" */
-  border-radius: 0px; /* Cuadrado para mantener el neobrutalismo */
+.animate-fade-in {
+  animation: fade-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-.tabulator-tableholder::-webkit-scrollbar-thumb:hover {
-  background: #10B981; /* Se vuelve verde al pasarle el mouse */
+/* ==================================================== */
+/* RESPONSIVE                                           */
+/* ==================================================== */
+
+@media (max-width: 1024px) {
+  .table-modern {
+    min-width: 600px;
+  }
+}
+
+@media (max-width: 768px) {
+  .table-modern th,
+  .table-modern td {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 640px) {
+  body {
+    overflow-x: hidden;
+  }
+  .table-container {
+    border-radius: 12px;
+  }
+  .mobile-card {
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .table-modern th {
+    font-size: 11px;
+  }
+  .table-modern td {
+    font-size: 13px;
+  }
 }

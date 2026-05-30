@@ -1,14 +1,23 @@
-import { useEffect, useState, useRef } from 'react';
-import { ReactTabulator } from 'react-tabulator';
-import 'react-tabulator/lib/styles.css';
-import 'react-tabulator/css/tabulator_midnight.min.css';
+import { useEffect, useState, useMemo } from 'react';
+import {
+  useReactTable,
+  getCoreRowModel,
+  getPaginationRowModel,
+  flexRender,
+} from '@tanstack/react-table';
 import Layout from '../components/Layout';
 import { apiGastos, apiCuotas } from '../services/api';
+
+// Función auxiliar para formatear la fecha sacada del componente principal
+const formatFecha = (valor) => {
+  if (!valor) return "";
+  const fecha = new Date(valor.includes("T") ? valor : `${valor}T00:00:00`);
+  return isNaN(fecha) ? valor : fecha.toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
 
 export default function Gastos() {
   const [gastos, setGastos] = useState([]);
   const [loading, setLoading] = useState(false);
-  const tableRef = useRef(null);
 
   const [filtroAnio, setFiltroAnio] = useState(new Date().getFullYear().toString());
   const [filtroMes, setFiltroMes] = useState((new Date().getMonth() + 1).toString().padStart(2, '0'));
@@ -52,7 +61,6 @@ export default function Gastos() {
         }
       })
       .catch(err => console.error("Error obteniendo tipo de cambio:", err));
-
   }, [filtroAnio, filtroMes]);
 
   const handleCrearGasto = async (e) => {
@@ -101,46 +109,75 @@ export default function Gastos() {
         CantidadCuotas: parseInt(cantidadCuotas)
       });
       if (response.data.Success) {
-        setIsFraccionarModalOpen(false);
+        setIsFraccionarModalOpen(false);  
         fetchGastos(); 
       }
     } catch (error) { console.error(error); } finally { setFraccionarLoading(false); }
   };
 
-  const formatFecha = (valor) => {
-    if (!valor) return "";
-    const fecha = new Date(valor.includes("T") ? valor : `${valor}T00:00:00`);
-    return isNaN(fecha) ? valor : fecha.toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  };
-
-  const columns = [
-    { title: "Comercio", field: "Comercio", widthGrow: 2, cssClass: "font-bold cursor-pointer" },
+  // --- CONFIGURACIÓN DE TANSTACK TABLE ---
+  const columns = useMemo(() => [
     { 
-      title: "Monto", 
-      field: "Monto", 
-      hozAlign: "right", 
-      cssClass: "cursor-pointer",
-      formatter: (cell) => {
-        const data = cell.getRow().getData();
-        const monto = parseFloat(data.Monto);
-        // Indicador visual simple de moneda
-        if (data.Moneda === 'USD') {
-          return `<span class="text-green-400 font-black text-sm">$ ${monto.toFixed(2)}</span>`;
-        }
-        return `<span class="text-white font-black text-sm">S/ ${monto.toFixed(2)}</span>`;
+      accessorKey: 'Comercio', 
+      header: 'Comercio',
+      cell: (info) => <span className="font-bold">{info.getValue()}</span>
+    },
+    { 
+      accessorKey: 'Monto', 
+      header: () => <div className="text-right">Monto</div>,
+      cell: (info) => {
+        const monto = parseFloat(info.getValue());
+        const moneda = info.row.original.Moneda;
+        
+        return (
+          <div className="text-right w-full">
+            {moneda === 'USD' ? (
+              <span className="text-green-400 font-black text-sm">$ {monto.toFixed(2)}</span>
+            ) : (
+              <span className="text-white font-black text-sm">S/ {monto.toFixed(2)}</span>
+            )}
+          </div>
+        );
       }
     },
-    { title: "Fecha", field: "FechaOperacion", width: 160, formatter: (cell) => formatFecha(cell.getValue()), cssClass: "cursor-pointer" },
-    { title: "Categoría", field: "Categoria", cssClass: "cursor-pointer" },
     { 
-      title: "Estado", width: 100, hozAlign: "center",
-      formatter: (cell) => {
-        const data = cell.getRow().getData();
-        if (data.EsGastoReferencia || data.EsPagoDeCuota) return `<span class="text-gray-500 text-xs italic font-bold">No aplicable</span>`;
-        return `<span class="text-brillo-primario text-xs font-bold border border-brillo-primario px-1 rounded">Normal</span>`;
+      accessorKey: 'FechaOperacion', 
+      header: 'Fecha',
+      cell: (info) => <span>{formatFecha(info.getValue())}</span>
+    },
+    { 
+      accessorKey: 'Categoria', 
+      header: 'Categoría' 
+    },
+    { 
+      id: 'Estado',
+      header: () => <div className="text-center">Estado</div>,
+      cell: (info) => {
+        const data = info.row.original;
+        return (
+          <div className="text-center">
+            {data.EsGastoReferencia || data.EsPagoDeCuota ? (
+              <span className="text-gray-500 text-xs italic font-bold">No aplicable</span>
+            ) : (
+              <span className="text-brillo-primario text-xs font-bold border border-brillo-primario px-1 rounded">Normal</span>
+            )}
+          </div>
+        );
       }
     }
-  ];
+  ], []);
+
+  const table = useReactTable({
+    data: gastos,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    initialState: {
+      pagination: {
+        pageSize: 10,
+      },
+    },
+  });
 
   return (
     <Layout>
@@ -164,25 +201,77 @@ export default function Gastos() {
         </button>
       </header>
 
+      {/* --- TABLA CON TANSTACK REACT TABLE --- */}
       <div className="bg-slate-900 border-2 border-gray-700 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-1">
-        <ReactTabulator
-          onRef={(r) => (tableRef.current = r)}
-          data={gastos}
-          columns={columns}
-          layout={"fitDataStretch"}
-          options={{ 
-            pagination: "local", 
-            paginationSize: 10, 
-            rowFormatter: (row) => { if(row.getData().EsGastoReferencia) row.getElement().style.opacity = "0.4"; }
-          }}
-          // El click de la fila separado para que funcione bien
-          events={{
-            rowClick: (e, row) => {
-              setGastoDetalle(row.getData());
-              setIsDetalleModalOpen(true);
-            }
-          }}
-        />
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              {table.getHeaderGroups().map(headerGroup => (
+                <tr key={headerGroup.id} className="border-b-2 border-gray-700 bg-slate-800">
+                  {headerGroup.headers.map(header => (
+                    <th key={header.id} className="p-4 font-extrabold text-gray-300 uppercase tracking-wider text-xs">
+                      {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                    </th>
+                  ))}
+                </tr>
+              ))}
+            </thead>
+            <tbody>
+              {table.getRowModel().rows.map(row => {
+                const esReferencia = row.original.EsGastoReferencia;
+                return (
+                  <tr 
+                    key={row.id}
+                    onClick={() => {
+                      setGastoDetalle(row.original);
+                      setIsDetalleModalOpen(true);
+                    }}
+                    className={`
+                      cursor-pointer border-b border-gray-800 hover:bg-slate-800 transition-colors
+                      ${esReferencia ? 'opacity-40' : 'opacity-100'}
+                    `}
+                  >
+                    {row.getVisibleCells().map(cell => (
+                      <td key={cell.id} className="p-4 text-sm text-gray-200">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+              {table.getRowModel().rows.length === 0 && (
+                <tr>
+                  <td colSpan={columns.length} className="p-6 text-center text-gray-500 font-bold uppercase">
+                    No hay gastos en este periodo
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* CONTROLES DE PAGINACIÓN NEOBRUTALISTAS */}
+        {table.getPageCount() > 1 && (
+          <div className="flex items-center justify-between p-4 bg-slate-900 border-t-2 border-gray-700">
+            <button
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+              className="bg-slate-800 text-white font-bold px-4 py-2 border-2 border-gray-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-white transition-colors uppercase text-xs"
+            >
+              Anterior
+            </button>
+            <span className="text-gray-300 font-bold text-sm">
+              Página {table.getState().pagination.pageIndex + 1} de {table.getPageCount()}
+            </span>
+            <button
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+              className="bg-slate-800 text-white font-bold px-4 py-2 border-2 border-gray-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-white transition-colors uppercase text-xs"
+            >
+              Siguiente
+            </button>
+          </div>
+        )}
       </div>
 
       {/* --- 1. MODAL DE DETALLE DEL GASTO --- */}
@@ -271,7 +360,7 @@ export default function Gastos() {
                 </div>
               </div>
 
-              {/* FILA 2: TIPO DE CAMBIO (Aparece abajo si es USD para no aplastar en celular) */}
+              {/* FILA 2: TIPO DE CAMBIO */}
               {moneda === 'USD' && (
                 <div className="animate-slide-down">
                   <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Tipo de Cambio Aplicado</label>
