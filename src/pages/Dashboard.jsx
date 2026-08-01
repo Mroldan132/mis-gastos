@@ -143,7 +143,7 @@ export default function Dashboard() {
             <option value="01">Enero</option><option value="02">Febrero</option><option value="03">Marzo</option><option value="04">Abril</option><option value="05">Mayo</option><option value="06">Junio</option><option value="07">Julio</option><option value="08">Agosto</option><option value="09">Septiembre</option><option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
           </select>
           <select value={filtroAnio} onChange={(e) => setFiltroAnio(e.target.value)} className="bg-slate-900 border border-gray-700 text-gray-200 px-3 py-2 rounded-lg text-sm font-medium outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 shadow-sm cursor-pointer">
-            <option value="2024">2024</option><option value="2025">2025</option><option value="2026">2026</option>
+            <option value="2024">2024</option><option value="2025">2025</option><option value="2026">2026</option><option value="2027">2027</option>
           </select>
         </div>
       </header>
