@@ -1,23 +1,13 @@
 import React, { useEffect, useState, useMemo } from 'react';
-
-// --- MOCK DATA PARA LA VISTA PREVIA ---
-const mockGastos = [
-  { id: 1, Comercio: "Supermercado Wong", Monto: 150.50, Categoria: "Comida", Moneda: "PEN", FechaOperacion: "2024-03-15T10:30:00", EsGastoReferencia: false, EsPagoDeCuota: false },
-  { id: 2, Comercio: "Netflix", Monto: 15.99, Categoria: "Entretenimiento", Moneda: "USD", FechaOperacion: "2024-03-12T00:00:00", EsGastoReferencia: false, EsPagoDeCuota: false },
-  { id: 3, Comercio: "Pago Tarjeta (Cuota 2/12)", Monto: 350.00, Categoria: "Servicios", Moneda: "PEN", FechaOperacion: "2024-03-10T14:20:00", EsGastoReferencia: false, EsPagoDeCuota: true },
-  { id: 4, Comercio: "Uber", Monto: 25.00, Categoria: "Transporte", Moneda: "PEN", FechaOperacion: "2024-03-16T18:45:00", EsGastoReferencia: false, EsPagoDeCuota: false },
-  { id: 5, Comercio: "Alquiler (Referencia)", Monto: 1200.00, Categoria: "Hogar", Moneda: "PEN", FechaOperacion: "2024-03-01T08:00:00", EsGastoReferencia: true, EsPagoDeCuota: false },
-];
-
-// --- COMPONENTES SIMULADOS ---
-// Simulamos el Layout
-const Layout = ({ children }) => (
-  <div className="min-h-screen bg-slate-950 p-4 md:p-8 font-sans">
-    <div className="max-w-6xl mx-auto">
-      {children}
-    </div>
-  </div>
-);
+import {
+  useReactTable,
+  getCoreRowModel,
+  getPaginationRowModel,
+  getFilteredRowModel,
+  flexRender,
+} from '@tanstack/react-table';
+import Layout from '../components/Layout';
+import { apiGastos, apiCuotas } from '../services/api';
 
 // Función auxiliar para formatear la fecha
 const formatFecha = (valor) => {
@@ -55,9 +45,13 @@ export default function Gastos() {
   const [cantidadCuotas, setCantidadCuotas] = useState('');
   const [fraccionarLoading, setFraccionarLoading] = useState(false);
 
-  const fetchGastos = () => {
-    // Simulamos la carga de la API
-    setGastos(mockGastos);
+  const fetchGastos = async () => {
+    const userId = localStorage.getItem('userId');
+    const periodo = `${filtroAnio}-${filtroMes}`;
+    try {
+      const response = await apiGastos.get(`/gastos?userId=${userId}&mes=${periodo}`);
+      if (response.data.Success) setGastos(response.data.Gastos);
+    } catch (error) { console.error("Error cargando gastos:", error); }
   };
 
   useEffect(() => { 
@@ -74,29 +68,33 @@ export default function Gastos() {
       .catch(err => console.error("Error obteniendo tipo de cambio:", err));
   }, [filtroAnio, filtroMes]);
 
-  const handleCrearGasto = (e) => {
+  const handleCrearGasto = async (e) => {
     e.preventDefault();
     setLoading(true);
-    
-    // Simulación de guardado
-    setTimeout(() => {
-      const nuevo = {
-        id: Math.random(),
-        Comercio: nuevoComercio,
+    try {
+      const response = await apiGastos.post('/gastos', {
+        UserId: localStorage.getItem('userId'),
         Monto: parseFloat(nuevoMonto),
         Categoria: nuevaCategoria,
+        Comercio: nuevoComercio,
+        EsPagoDeCuota: false,
+        CuotaIdRelacionada: "",
         Moneda: moneda,
-        FechaOperacion: new Date().toISOString(),
-        EsGastoReferencia: false,
-        EsPagoDeCuota: false
-      };
-      setGastos([...gastos, nuevo]);
-      setIsModalOpen(false);
-      setNuevoMonto('');
-      setNuevoComercio('');
-      setMoneda('PEN'); 
+        TipoCambio: moneda === 'USD' ? parseFloat(tasaManual) : 1
+      });
+
+      if (response.data.Success) {
+        setIsModalOpen(false);
+        setNuevoMonto('');
+        setNuevoComercio('');
+        setMoneda('PEN'); // Reset a soles
+        fetchGastos();
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
       setLoading(false);
-    }, 500);
+    }
   };
 
   const abrirModalFraccionar = (rowData) => {
@@ -106,41 +104,110 @@ export default function Gastos() {
     setIsFraccionarModalOpen(true);
   };
 
-  const confirmarFraccionamiento = (e) => {
+  const confirmarFraccionamiento = async (e) => {
     e.preventDefault();
     setFraccionarLoading(true);
-    setTimeout(() => {
-      setIsFraccionarModalOpen(false);  
-      setFraccionarLoading(false);
-    }, 500);
+    try {
+      const response = await apiCuotas.post('/cuotas', {
+        UserId: localStorage.getItem('userId'),
+        FechaOperacionOriginal: gastoSeleccionado.FechaOperacion,
+        CantidadCuotas: parseInt(cantidadCuotas)
+      });
+      if (response.data.Success) {
+        setIsFraccionarModalOpen(false);  
+        fetchGastos(); 
+      }
+    } catch (error) { console.error(error); } finally { setFraccionarLoading(false); }
   };
 
-  // --- LÓGICA DE FILTRADO MANUAL (Reemplazando Tanstack temporalmente) ---
-  const gastosFiltrados = useMemo(() => {
+  // 1. Filtrar los gastos crudos según la pestaña seleccionada
+  const gastosFiltradosPorVista = useMemo(() => {
     return gastos.filter(gasto => {
-      // 1. Filtro por Pestaña
       const esReferenciaOCuota = gasto.EsGastoReferencia || gasto.EsPagoDeCuota;
-      let cumpleVista = true;
-      if (tipoVista === 'reales') cumpleVista = !esReferenciaOCuota;
-      if (tipoVista === 'referencias') cumpleVista = esReferenciaOCuota;
-
-      // 2. Filtro por Buscador Global
-      const termino = globalFilter.toLowerCase();
-      const cumpleBusqueda = gasto.Comercio.toLowerCase().includes(termino) || 
-                             gasto.Categoria.toLowerCase().includes(termino);
-
-      return cumpleVista && cumpleBusqueda;
+      if (tipoVista === 'reales') return !esReferenciaOCuota;
+      if (tipoVista === 'referencias') return esReferenciaOCuota;
+      return true; // 'todos'
     });
-  }, [gastos, tipoVista, globalFilter]);
+  }, [gastos, tipoVista]);
 
-  // Calcular totales sobre las filas resultantes
+  // --- CONFIGURACIÓN DE TANSTACK TABLE ---
+  const columns = useMemo(() => [
+    { 
+      accessorKey: 'Comercio', 
+      header: 'Comercio',
+      cell: (info) => <span className="font-bold">{info.getValue()}</span>
+    },
+    { 
+      accessorKey: 'Monto', 
+      header: () => <div className="text-right">Monto</div>,
+      cell: (info) => {
+        const monto = parseFloat(info.getValue());
+        const moneda = info.row.original.Moneda;
+        
+        return (
+          <div className="text-right w-full">
+            {moneda === 'USD' ? (
+              <span className="text-green-400 font-black text-sm">$ {monto.toFixed(2)}</span>
+            ) : (
+              <span className="text-white font-black text-sm">S/ {monto.toFixed(2)}</span>
+            )}
+          </div>
+        );
+      }
+    },
+    { 
+      accessorKey: 'FechaOperacion', 
+      header: 'Fecha',
+      cell: (info) => <span>{formatFecha(info.getValue())}</span>
+    },
+    { 
+      accessorKey: 'Categoria', 
+      header: 'Categoría' 
+    },
+    { 
+      id: 'Estado',
+      header: () => <div className="text-center">Estado</div>,
+      cell: (info) => {
+        const data = info.row.original;
+        return (
+          <div className="text-center">
+            {data.EsGastoReferencia || data.EsPagoDeCuota ? (
+              <span className="text-gray-500 text-xs italic font-bold">No aplicable</span>
+            ) : (
+              <span className="text-brillo-primario text-xs font-bold border border-brillo-primario px-1 rounded">Normal</span>
+            )}
+          </div>
+        );
+      }
+    }
+  ], []);
+
+  const table = useReactTable({
+    data: gastosFiltradosPorVista, // Usamos la data pre-filtrada por las pestañas
+    columns,
+    state: {
+      globalFilter, // Estado del buscador conectado a Tanstack
+    },
+    onGlobalFilterChange: setGlobalFilter,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(), // Necesario para el buscador
+    getPaginationRowModel: getPaginationRowModel(),
+    initialState: {
+      pagination: {
+        pageSize: 10,
+      },
+    },
+  });
+
+  // 2. Calcular totales sobre las filas resultantes de Tanstack (aplica filtro de pestaña + buscador)
   const totales = useMemo(() => {
     let totalPEN = 0;
     let totalUSD = 0;
     
-    gastosFiltrados.forEach(row => {
-      const monto = parseFloat(row.Monto);
-      if (row.Moneda === 'USD') {
+    // getFilteredRowModel() devuelve las filas después de aplicar el globalFilter
+    table.getFilteredRowModel().rows.forEach(row => {
+      const monto = parseFloat(row.original.Monto);
+      if (row.original.Moneda === 'USD') {
         totalUSD += monto;
       } else {
         totalPEN += monto;
@@ -148,11 +215,7 @@ export default function Gastos() {
     });
 
     return { totalPEN, totalUSD };
-  }, [gastosFiltrados]);
-
-  // Colores y clases para mantener la estética
-  const colorPrimario = "emerald-400"; // Reemplazo de brillo-primario
-  const colorAcento = "violet-500";   // Reemplazo de acento-neobrutal
+  }, [table.getFilteredRowModel().rows]);
 
   return (
     <Layout>
@@ -160,18 +223,18 @@ export default function Gastos() {
         <div>
           <h1 className="text-4xl font-extrabold uppercase tracking-tight text-white">Mis Gastos</h1>
           <div className="flex items-center gap-2 mt-2">
-            <select value={filtroMes} onChange={(e) => setFiltroMes(e.target.value)} className={`bg-slate-800 border-2 border-${colorPrimario} text-white px-2 py-1 font-bold outline-none cursor-pointer`}>
+            <select value={filtroMes} onChange={(e) => setFiltroMes(e.target.value)} className="bg-slate-800 border-2 border-brillo-primario text-white px-2 py-1 font-bold outline-none cursor-pointer">
               <option value="01">Enero</option><option value="02">Febrero</option><option value="03">Marzo</option>
               <option value="04">Abril</option><option value="05">Mayo</option><option value="06">Junio</option>
               <option value="07">Julio</option><option value="08">Agosto</option><option value="09">Septiembre</option>
               <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
             </select>
-            <select value={filtroAnio} onChange={(e) => setFiltroAnio(e.target.value)} className={`bg-slate-800 border-2 border-${colorPrimario} text-white px-2 py-1 font-bold outline-none cursor-pointer`}>
+            <select value={filtroAnio} onChange={(e) => setFiltroAnio(e.target.value)} className="bg-slate-800 border-2 border-brillo-primario text-white px-2 py-1 font-bold outline-none cursor-pointer">
               <option value="2024">2024</option><option value="2025">2025</option><option value="2026">2026</option>
             </select>
           </div>
         </div>
-        <button onClick={() => setIsModalOpen(true)} className={`bg-${colorAcento} text-slate-900 font-extrabold px-6 py-3 border-4 border-transparent hover:border-white shadow-[4px_4px_0px_0px_rgba(255,255,255,1)] hover:-translate-y-1 transition-all`}>
+        <button onClick={() => setIsModalOpen(true)} className="bg-acento-neobrutal text-slate-900 font-extrabold px-6 py-3 border-4 border-transparent hover:border-white shadow-[4px_4px_0px_0px_rgba(255,255,255,1)] hover:-translate-y-1 transition-all">
           + NUEVO GASTO
         </button>
       </header>
@@ -181,7 +244,7 @@ export default function Gastos() {
         <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
           <button 
             onClick={() => setTipoVista('reales')}
-            className={`px-4 py-2 font-extrabold uppercase text-xs transition-all border-2 ${tipoVista === 'reales' ? `bg-${colorPrimario} text-white border-transparent shadow-[4px_4px_0px_0px_rgba(255,255,255,1)]` : 'bg-slate-800 text-gray-400 border-gray-600 hover:text-white'}`}
+            className={`px-4 py-2 font-extrabold uppercase text-xs transition-all border-2 ${tipoVista === 'reales' ? 'bg-brillo-primario text-white border-transparent shadow-[4px_4px_0px_0px_rgba(255,255,255,1)]' : 'bg-slate-800 text-gray-400 border-gray-600 hover:text-white'}`}
           >
             Gastos Reales
           </button>
@@ -203,9 +266,9 @@ export default function Gastos() {
           <input 
             type="text" 
             placeholder="Buscar comercio o categoría..." 
-            value={globalFilter}
+            value={globalFilter ?? ''}
             onChange={(e) => setGlobalFilter(e.target.value)}
-            className={`w-full bg-slate-800 border-2 border-gray-600 focus:border-${colorAcento} text-white px-4 py-2 outline-none font-bold placeholder-gray-500 transition-colors`}
+            className="w-full bg-slate-800 border-2 border-gray-600 focus:border-acento-neobrutal text-white px-4 py-2 outline-none font-bold placeholder-gray-500 transition-colors"
           />
           {globalFilter && (
             <button 
@@ -230,27 +293,29 @@ export default function Gastos() {
         </div>
       </div>
 
-      {/* --- TABLA HTML ESTÁNDAR --- */}
+      {/* --- TABLA CON TANSTACK REACT TABLE --- */}
       <div className="bg-slate-900 border-2 border-gray-700 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-1 mb-8">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b-2 border-gray-700 bg-slate-800">
-                <th className="p-4 font-extrabold text-gray-300 uppercase tracking-wider text-xs">Comercio</th>
-                <th className="p-4 font-extrabold text-gray-300 uppercase tracking-wider text-xs text-right">Monto</th>
-                <th className="p-4 font-extrabold text-gray-300 uppercase tracking-wider text-xs">Fecha</th>
-                <th className="p-4 font-extrabold text-gray-300 uppercase tracking-wider text-xs">Categoría</th>
-                <th className="p-4 font-extrabold text-gray-300 uppercase tracking-wider text-xs text-center">Estado</th>
-              </tr>
+              {table.getHeaderGroups().map(headerGroup => (
+                <tr key={headerGroup.id} className="border-b-2 border-gray-700 bg-slate-800">
+                  {headerGroup.headers.map(header => (
+                    <th key={header.id} className="p-4 font-extrabold text-gray-300 uppercase tracking-wider text-xs">
+                      {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                    </th>
+                  ))}
+                </tr>
+              ))}
             </thead>
             <tbody>
-              {gastosFiltrados.map(row => {
-                const esReferencia = row.EsGastoReferencia || row.EsPagoDeCuota;
+              {table.getRowModel().rows.map(row => {
+                const esReferencia = row.original.EsGastoReferencia || row.original.EsPagoDeCuota;
                 return (
                   <tr 
                     key={row.id}
                     onClick={() => {
-                      setGastoDetalle(row);
+                      setGastoDetalle(row.original);
                       setIsDetalleModalOpen(true);
                     }}
                     className={`
@@ -258,31 +323,17 @@ export default function Gastos() {
                       ${esReferencia ? 'opacity-40 hover:opacity-80' : 'opacity-100'}
                     `}
                   >
-                    <td className="p-4 text-sm text-gray-200 font-bold">{row.Comercio}</td>
-                    <td className="p-4 text-sm">
-                      <div className="text-right w-full">
-                        {row.Moneda === 'USD' ? (
-                          <span className="text-green-400 font-black text-sm">$ {row.Monto.toFixed(2)}</span>
-                        ) : (
-                          <span className="text-white font-black text-sm">S/ {row.Monto.toFixed(2)}</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="p-4 text-sm text-gray-200">{formatFecha(row.FechaOperacion)}</td>
-                    <td className="p-4 text-sm text-gray-200">{row.Categoria}</td>
-                    <td className="p-4 text-sm text-center">
-                       {esReferencia ? (
-                        <span className="text-gray-500 text-xs italic font-bold">No aplicable</span>
-                      ) : (
-                        <span className={`text-${colorPrimario} text-xs font-bold border border-${colorPrimario} px-1 rounded`}>Normal</span>
-                      )}
-                    </td>
+                    {row.getVisibleCells().map(cell => (
+                      <td key={cell.id} className="p-4 text-sm text-gray-200">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    ))}
                   </tr>
                 );
               })}
-              {gastosFiltrados.length === 0 && (
+              {table.getRowModel().rows.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="p-10 text-center text-gray-500 font-bold uppercase bg-slate-800/50">
+                  <td colSpan={columns.length} className="p-10 text-center text-gray-500 font-bold uppercase bg-slate-800/50">
                     No se encontraron gastos con estos filtros
                   </td>
                 </tr>
@@ -290,6 +341,29 @@ export default function Gastos() {
             </tbody>
           </table>
         </div>
+
+        {/* CONTROLES DE PAGINACIÓN NEOBRUTALISTAS */}
+        {table.getPageCount() > 1 && (
+          <div className="flex items-center justify-between p-4 bg-slate-900 border-t-2 border-gray-700">
+            <button
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+              className="bg-slate-800 text-white font-bold px-4 py-2 border-2 border-gray-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-white transition-colors uppercase text-xs"
+            >
+              Anterior
+            </button>
+            <span className="text-gray-300 font-bold text-sm">
+              Página {table.getState().pagination.pageIndex + 1} de {table.getPageCount()}
+            </span>
+            <button
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+              className="bg-slate-800 text-white font-bold px-4 py-2 border-2 border-gray-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-white transition-colors uppercase text-xs"
+            >
+              Siguiente
+            </button>
+          </div>
+        )}
       </div>
 
       {/* --- 1. MODAL DE DETALLE DEL GASTO --- */}
@@ -304,7 +378,7 @@ export default function Gastos() {
             </h2>
 
             <div className="flex flex-col gap-4 mb-8">
-              <div className={`bg-slate-800 p-4 border-l-4 border-${colorAcento} flex justify-between items-center`}>
+              <div className="bg-slate-800 p-4 border-l-4 border-acento-neobrutal flex justify-between items-center">
                 <span className="text-sm text-gray-400 font-bold uppercase">Monto</span>
                 <span className={`text-3xl font-black ${gastoDetalle.Moneda === 'USD' ? 'text-green-400' : 'text-white'}`}>
                   {gastoDetalle.Moneda === 'USD' ? '$' : 'S/'} {gastoDetalle.Monto.toFixed(2)}
@@ -326,7 +400,7 @@ export default function Gastos() {
             {(!gastoDetalle.EsGastoReferencia && !gastoDetalle.EsPagoDeCuota) ? (
               <button 
                 onClick={() => abrirModalFraccionar(gastoDetalle)}
-                className={`w-full bg-${colorPrimario} text-white font-extrabold text-lg py-4 border-4 border-transparent hover:border-white transition-all shadow-[6px_6px_0px_0px_rgba(255,255,255,1)]`}
+                className="w-full bg-brillo-primario text-white font-extrabold text-lg py-4 border-4 border-transparent hover:border-white transition-all shadow-[6px_6px_0px_0px_rgba(255,255,255,1)]"
               >
                 💳 FRACCIONAR EN CUOTAS
               </button>
@@ -342,14 +416,14 @@ export default function Gastos() {
       {/* --- 2. MODAL NUEVO GASTO --- */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className={`bg-slate-900 border-4 border-${colorAcento} p-8 max-w-md w-full shadow-[12px_12px_0px_0px_rgba(16,185,129,1)] relative`}>
+          <div className="bg-slate-900 border-4 border-acento-neobrutal p-8 max-w-md w-full shadow-[12px_12px_0px_0px_rgba(16,185,129,1)] relative">
             <button onClick={() => setIsModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white font-black text-xl">✕</button>
             <h2 className="text-3xl font-extrabold text-white mb-6 uppercase tracking-tight">Registrar Gasto</h2>
             <form onSubmit={handleCrearGasto} className="flex flex-col gap-5">
               
               <div>
                 <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Comercio</label>
-                <input type="text" value={nuevoComercio} onChange={(e) => setNuevoComercio(e.target.value)} className={`w-full bg-slate-800 border-2 border-gray-600 focus:border-${colorAcento} text-white px-4 py-3 outline-none`} required />
+                <input type="text" value={nuevoComercio} onChange={(e) => setNuevoComercio(e.target.value)} className="w-full bg-slate-800 border-2 border-gray-600 focus:border-acento-neobrutal text-white px-4 py-3 outline-none" required />
               </div>
 
               {/* FILA 1: MONEDA Y MONTO */}
@@ -359,7 +433,7 @@ export default function Gastos() {
                   <select 
                     value={moneda} 
                     onChange={(e) => setMoneda(e.target.value)}
-                    className={`w-full bg-slate-800 border-2 border-gray-600 focus:border-${colorAcento} text-white px-4 py-3 outline-none appearance-none cursor-pointer`}
+                    className="w-full bg-slate-800 border-2 border-gray-600 focus:border-acento-neobrutal text-white px-4 py-3 outline-none appearance-none cursor-pointer"
                   >
                     <option value="PEN">Soles</option>
                     <option value="USD">Dólares</option>
@@ -372,7 +446,7 @@ export default function Gastos() {
                     step="0.01" 
                     value={nuevoMonto} 
                     onChange={(e) => setNuevoMonto(e.target.value)} 
-                    className={`w-full bg-slate-800 border-2 border-gray-600 focus:border-${colorAcento} text-white px-4 py-3 outline-none`} 
+                    className="w-full bg-slate-800 border-2 border-gray-600 focus:border-acento-neobrutal text-white px-4 py-3 outline-none" 
                     required 
                   />
                 </div>
@@ -387,21 +461,21 @@ export default function Gastos() {
                     step="0.001" 
                     value={tasaManual} 
                     onChange={(e) => setTasaManual(e.target.value)} 
-                    className={`w-full bg-slate-800 border-2 border-${colorPrimario} text-white px-4 py-3 outline-none font-black text-xl text-center shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] focus:shadow-[4px_4px_0px_0px_rgba(139,92,246,1)]`} 
+                    className="w-full bg-slate-800 border-2 border-brillo-primario text-white px-4 py-3 outline-none font-black text-xl text-center shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] focus:shadow-[4px_4px_0px_0px_rgba(139,92,246,1)]" 
                     required 
                   />
-                  <p className={`text-[10px] text-${colorPrimario} font-bold mt-1 uppercase text-center`}>Sugerido por la API de mercado</p>
+                  <p className="text-[10px] text-brillo-primario font-bold mt-1 uppercase text-center">Sugerido por la API de mercado</p>
                 </div>
               )}
 
               <div>
                 <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Categoría</label>
-                <select value={nuevaCategoria} onChange={(e) => setNuevaCategoria(e.target.value)} className={`w-full bg-slate-800 border-2 border-gray-600 focus:border-${colorAcento} text-white px-4 py-3 outline-none`}>
+                <select value={nuevaCategoria} onChange={(e) => setNuevaCategoria(e.target.value)} className="w-full bg-slate-800 border-2 border-gray-600 focus:border-acento-neobrutal text-white px-4 py-3 outline-none">
                   <option value="Comida">Comida</option><option value="Transporte">Transporte</option><option value="Servicios">Servicios</option><option value="Hogar">Hogar</option><option value="Entretenimiento">Entretenimiento</option><option value="Salud">Salud</option><option value="Tecnología">Tecnología</option><option value="Otros">Otros</option>
                 </select>
               </div>
 
-              <button type="submit" disabled={loading} className={`mt-4 w-full bg-${colorAcento} text-slate-900 font-extrabold text-lg py-4 border-4 border-transparent hover:border-white hover:-translate-y-1 transition-all shadow-[6px_6px_0px_0px_rgba(255,255,255,1)]`}>
+              <button type="submit" disabled={loading} className="mt-4 w-full bg-acento-neobrutal text-slate-900 font-extrabold text-lg py-4 border-4 border-transparent hover:border-white hover:-translate-y-1 transition-all shadow-[6px_6px_0px_0px_rgba(255,255,255,1)]">
                 {loading ? 'GUARDANDO...' : 'GUARDAR GASTO'}
               </button>
             </form>
@@ -412,16 +486,16 @@ export default function Gastos() {
       {/* --- 3. MODAL FRACCIONAR --- */}
       {isFraccionarModalOpen && gastoSeleccionado && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className={`bg-slate-900 border-4 border-${colorPrimario} p-8 max-w-md w-full shadow-[12px_12px_0px_0px_rgba(139,92,246,1)] relative`}>
+          <div className="bg-slate-900 border-4 border-brillo-primario p-8 max-w-md w-full shadow-[12px_12px_0px_0px_rgba(139,92,246,1)] relative">
             <button onClick={() => setIsFraccionarModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white font-black text-xl">✕</button>
             <h2 className="text-3xl font-extrabold text-white mb-2 uppercase tracking-tight">Fraccionar Gasto</h2>
             <p className="text-gray-400 mb-6 font-bold text-sm">Dividirás "{gastoSeleccionado.Comercio}" de {gastoSeleccionado.Moneda === 'USD' ? '$' : 'S/'} {gastoSeleccionado.Monto}.</p>
             <form onSubmit={confirmarFraccionamiento} className="flex flex-col gap-5">
               <div>
                 <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">¿En cuántas cuotas?</label>
-                <input type="number" min="2" max="36" value={cantidadCuotas} onChange={(e) => setCantidadCuotas(e.target.value)} className={`w-full bg-slate-800 border-2 border-${colorPrimario} text-white px-4 py-3 outline-none text-2xl font-black text-center shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] focus:shadow-[4px_4px_0px_0px_rgba(139,92,246,1)]`} required />
+                <input type="number" min="2" max="36" value={cantidadCuotas} onChange={(e) => setCantidadCuotas(e.target.value)} className="w-full bg-slate-800 border-2 border-brillo-primario text-white px-4 py-3 outline-none text-2xl font-black text-center shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] focus:shadow-[4px_4px_0px_0px_rgba(139,92,246,1)]" required />
               </div>
-              <button type="submit" disabled={fraccionarLoading} className={`mt-4 w-full bg-${colorPrimario} text-white font-extrabold text-lg py-4 border-4 border-transparent hover:border-white hover:-translate-y-1 transition-all shadow-[6px_6px_0px_0px_rgba(255,255,255,1)]`}>
+              <button type="submit" disabled={fraccionarLoading} className="mt-4 w-full bg-brillo-primario text-white font-extrabold text-lg py-4 border-4 border-transparent hover:border-white hover:-translate-y-1 transition-all shadow-[6px_6px_0px_0px_rgba(255,255,255,1)]">
                 {fraccionarLoading ? 'PROCESANDO...' : 'CONFIRMAR CUOTAS'}
               </button>
             </form>
