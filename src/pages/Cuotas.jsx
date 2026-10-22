@@ -7,24 +7,43 @@ import {
 } from '@tanstack/react-table';
 import Layout from '../components/Layout';
 import { apiCuotas } from '../services/api';
+import {
+  Icon, PageHeader, Segmented, Modal, Field, AmountInput, EmptyState, ListSkeleton, Pagination, Spinner, StatCard,
+} from '../components/ui';
+import { formatMonto, formatFecha } from '../lib/format';
+
+const esPagada = (cuota) => cuota.Estado === 'Pagado';
+
+function EstadoBadge({ cuota }) {
+  return esPagada(cuota) ? (
+    <span className="badge border-positive/20 bg-positive/10 text-positive"><Icon name="check" size={12} strokeWidth={2.5} /> Pagada</span>
+  ) : (
+    <span className="badge border-warning/20 bg-warning/10 text-warning"><Icon name="clock" size={12} /> Pendiente</span>
+  );
+}
 
 export default function Cuotas() {
   const [cuotas, setCuotas] = useState([]);
+  const [cargando, setCargando] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [filtro, setFiltro] = useState('pendientes');
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [cuotaEditando, setCuotaEditando] = useState(null);
   const [nuevoMonto, setNuevoMonto] = useState('');
 
+  const [cuotaPorPagar, setCuotaPorPagar] = useState(null);
+  const [pagando, setPagando] = useState(false);
+
   const fetchCuotas = async () => {
     const userId = localStorage.getItem('userId');
     try {
       const response = await apiCuotas.get(`/cuotas?userId=${userId}`);
-      if (response.data.Success) {
-        setCuotas(response.data.Cuotas);
-      }
+      if (response.data.Success) setCuotas(response.data.Cuotas);
     } catch (error) {
       console.error("Error cargando cuotas:", error);
+    } finally {
+      setCargando(false);
     }
   };
 
@@ -32,32 +51,30 @@ export default function Cuotas() {
     fetchCuotas();
   }, []);
 
-  // --- PAGAR CUOTA ---
-  const handlePagarCuota = async (cuota) => {
-    if (cuota.Estado === 'Pagado') return;
-
-    const confirmar = window.confirm(`¿Confirmar el pago de S/ ${cuota.Monto} por ${cuota.Comercio}?`);
-    if (!confirmar) return;
-
+  // --- PAGAR CUOTA (con confirmación) ---
+  const confirmarPago = async () => {
+    setPagando(true);
     try {
-      // Como tu Lambda de C# ya creó el gasto en el futuro, solo le cambiamos el Estado a Pagado
+      // La Lambda ya creó el gasto futuro: solo se cambia su estado a Pagado
       const response = await apiCuotas.put('/cuotas', {
         UserId: localStorage.getItem('userId'),
-        FechaOperacion: cuota.FechaOperacion, // LLave para DynamoDB
+        FechaOperacion: cuotaPorPagar.FechaOperacion, // Llave para DynamoDB
         Estado: 'Pagado'
       });
-
       if (response.data.Success) {
-        fetchCuotas(); 
+        setCuotaPorPagar(null);
+        fetchCuotas();
       }
     } catch (error) {
       console.error("Error al pagar la cuota:", error);
+    } finally {
+      setPagando(false);
     }
   };
 
   // --- EDITAR MONTO ---
   const abrirModalEditar = (cuota) => {
-    if (cuota.Estado === 'Pagado') return; 
+    if (esPagada(cuota)) return;
     setCuotaEditando(cuota);
     setNuevoMonto(cuota.Monto);
     setIsEditModalOpen(true);
@@ -69,7 +86,7 @@ export default function Cuotas() {
     try {
       const response = await apiCuotas.put('/cuotas', {
         UserId: localStorage.getItem('userId'),
-        FechaOperacion: cuotaEditando.FechaOperacion, // LLave para DynamoDB
+        FechaOperacion: cuotaEditando.FechaOperacion, // Llave para DynamoDB
         Monto: parseFloat(nuevoMonto)
       });
       if (response.data.Success) {
@@ -83,77 +100,54 @@ export default function Cuotas() {
     }
   };
 
-  // Función auxiliar para formatear la fecha
-  const formatFecha = (valor) => {
-    if (!valor) return "";
-    const fecha = new Date(valor.includes("T") ? valor : `${valor}T00:00:00`);
-    return isNaN(fecha) ? valor : fecha.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  };
+  const resumen = useMemo(() => {
+    const pendientes = cuotas.filter(c => !esPagada(c));
+    return {
+      pendientes: pendientes.length,
+      pagadas: cuotas.length - pendientes.length,
+      totalPendiente: pendientes.reduce((s, c) => s + (Number(c.Monto) || 0), 0),
+      proxima: pendientes[0], // Ya vienen ordenadas por fecha de cobro
+    };
+  }, [cuotas]);
 
-  // --- CONFIGURACIÓN DE TANSTACK TABLE ---
+  const cuotasFiltradas = useMemo(() => cuotas.filter(c => {
+    if (filtro === 'pendientes') return !esPagada(c);
+    if (filtro === 'pagadas') return esPagada(c);
+    return true;
+  }), [cuotas, filtro]);
+
+  // --- TANSTACK TABLE ---
   const columns = useMemo(() => [
-    { 
-      accessorKey: 'Comercio', 
-      header: 'Detalle de Cuota',
-      cell: (info) => <span className="font-bold text-white">{info.getValue()}</span>
+    {
+      accessorKey: 'Comercio',
+      header: 'Detalle',
+      cell: (info) => <span className="font-medium text-ink">{info.getValue()}</span>
     },
-    { 
-      accessorKey: 'FechaOperacion', 
-      header: 'Fecha de Cobro',
-      cell: (info) => <span className="text-gray-300">{formatFecha(info.getValue())}</span>
+    {
+      accessorKey: 'FechaOperacion',
+      header: 'Fecha de cobro',
+      cell: (info) => <span className="text-muted num">{formatFecha(info.getValue())}</span>
     },
-    { 
-      accessorKey: 'Monto', 
-      header: () => <div className="text-right">Monto</div>,
-      cell: (info) => {
-        const monto = parseFloat(info.getValue());
-        return (
-          <div className="text-right w-full text-brillo-primario font-black text-sm">
-            S/ {monto.toFixed(2)}
-          </div>
-        );
-      }
-    },
-    { 
+    {
       accessorKey: 'Estado',
-      header: () => <div className="text-center">Estado</div>,
-      cell: (info) => {
-        const estado = info.getValue();
-        return (
-          <div className="text-center">
-            {estado === 'Pagado' ? (
-              <span className="bg-[#10B981]/20 text-[#10B981] px-2 py-1 text-xs font-bold border border-[#10B981]">PAGADO</span>
-            ) : (
-              <span className="bg-yellow-500/20 text-yellow-500 px-2 py-1 text-xs font-bold border border-yellow-500">PENDIENTE</span>
-            )}
-          </div>
-        );
-      }
+      header: 'Estado',
+      cell: (info) => <EstadoBadge cuota={info.row.original} />
     },
-    { 
+    {
+      accessorKey: 'Monto',
+      header: () => <div className="text-right">Monto</div>,
+      cell: (info) => <div className="text-right font-medium text-ink num">{formatMonto(info.getValue())}</div>
+    },
+    {
       id: 'Acciones',
-      header: () => <div className="text-center">Acciones</div>,
+      header: () => <div className="text-right">Acciones</div>,
       cell: (info) => {
         const cuota = info.row.original;
-        
-        if (cuota.Estado === 'Pagado') {
-          return <div className="text-center text-gray-500 text-xs italic">Completado</div>;
-        }
-        
+        if (esPagada(cuota)) return <div className="text-right text-xs text-faint">—</div>;
         return (
-          <div className="flex gap-2 justify-center">
-            <button 
-              onClick={() => abrirModalEditar(cuota)}
-              className="bg-slate-700 text-white px-3 py-1 text-xs font-bold border-2 border-transparent hover:border-brillo-primario transition-all cursor-pointer"
-            >
-              Editar
-            </button>
-            <button 
-              onClick={() => handlePagarCuota(cuota)}
-              className="bg-acento-neobrutal text-slate-900 px-3 py-1 text-xs font-black border-2 border-transparent hover:border-white transition-all cursor-pointer"
-            >
-              Pagar
-            </button>
+          <div className="flex justify-end gap-2">
+            <button onClick={() => abrirModalEditar(cuota)} className="btn-ghost h-9 px-3"><Icon name="edit" size={15} /> Editar</button>
+            <button onClick={() => setCuotaPorPagar(cuota)} className="btn-primary h-9 px-3.5"><Icon name="check" size={15} strokeWidth={2.25} /> Pagar</button>
           </div>
         );
       }
@@ -161,106 +155,148 @@ export default function Cuotas() {
   ], []);
 
   const table = useReactTable({
-    data: cuotas,
+    data: cuotasFiltradas,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    initialState: {
-      pagination: {
-        pageSize: 15,
-      },
-    },
+    initialState: { pagination: { pageSize: 15 } },
   });
+
+  const filas = table.getRowModel().rows;
 
   return (
     <Layout>
-      <header className="mb-8">
-        <h1 className="text-4xl font-extrabold uppercase tracking-tight text-white">Mis Cuotas</h1>
-        <p className="text-gray-400 text-lg mt-2">Controla tus fraccionamientos, ajusta precios y registra tus pagos.</p>
-      </header>
+      <PageHeader
+        eyebrow="Fraccionamientos"
+        title="Cuotas"
+        subtitle="Ajusta montos y registra el pago de cada cuota cuando se cobre."
+      />
 
-      {/* --- TABLA CON TANSTACK REACT TABLE --- */}
-      <div className="bg-slate-900 border-2 border-gray-700 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-1">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              {table.getHeaderGroups().map(headerGroup => (
-                <tr key={headerGroup.id} className="border-b-2 border-gray-700 bg-slate-800">
-                  {headerGroup.headers.map(header => (
-                    <th key={header.id} className="p-4 font-extrabold text-gray-300 uppercase tracking-wider text-xs">
-                      {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                    </th>
-                  ))}
-                </tr>
-              ))}
-            </thead>
-            <tbody>
-              {table.getRowModel().rows.map(row => (
-                <tr 
-                  key={row.id}
-                  className="border-b border-gray-800 hover:bg-slate-800 transition-colors"
-                >
-                  {row.getVisibleCells().map(cell => (
-                    <td key={cell.id} className="p-4 text-sm align-middle">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-              {table.getRowModel().rows.length === 0 && (
-                <tr>
-                  <td colSpan={columns.length} className="p-6 text-center text-gray-500 font-bold uppercase">
-                    No hay cuotas registradas
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* CONTROLES DE PAGINACIÓN */}
-        {table.getPageCount() > 1 && (
-          <div className="flex items-center justify-between p-4 bg-slate-900 border-t-2 border-gray-700">
-            <button
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-              className="bg-slate-800 text-white font-bold px-4 py-2 border-2 border-gray-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-white transition-colors uppercase text-xs"
-            >
-              Anterior
-            </button>
-            <span className="text-gray-300 font-bold text-sm">
-              Página {table.getState().pagination.pageIndex + 1} de {table.getPageCount()}
-            </span>
-            <button
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-              className="bg-slate-800 text-white font-bold px-4 py-2 border-2 border-gray-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-white transition-colors uppercase text-xs"
-            >
-              Siguiente
-            </button>
-          </div>
-        )}
+      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
+        <StatCard label="Por pagar" value={formatMonto(resumen.totalPendiente)} icon="clock" tone="neutral" className="col-span-2 md:col-span-1" />
+        <StatCard label="Pendientes" value={resumen.pendientes} icon="card" style={{ animationDelay: '40ms' }} />
+        <StatCard label="Pagadas" value={resumen.pagadas} icon="check" tone="positive" style={{ animationDelay: '80ms' }} />
       </div>
 
-      {/* --- MODAL EDITAR MONTO --- */}
-      {isEditModalOpen && cuotaEditando && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border-4 border-brillo-primario p-8 max-w-sm w-full shadow-[12px_12px_0px_0px_rgba(139,92,246,1)] relative">
-            <button onClick={() => setIsEditModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white font-black text-xl">✕</button>
-            <h2 className="text-2xl font-extrabold text-white mb-2 uppercase tracking-tight">Ajustar Precio</h2>
-            <p className="text-gray-400 text-sm mb-6 font-bold">Modificando: "{cuotaEditando.Comercio}".</p>
-            <form onSubmit={guardarNuevoMonto} className="flex flex-col gap-5">
-              <div>
-                <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Nuevo Monto (S/)</label>
-                <input type="number" step="0.01" value={nuevoMonto} onChange={(e) => setNuevoMonto(e.target.value)} className="w-full bg-slate-800 border-2 border-brillo-primario text-white px-4 py-3 outline-none text-2xl font-black text-center shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] focus:shadow-[4px_4px_0px_0px_rgba(139,92,246,1)]" required />
-              </div>
-              <button type="submit" disabled={loading} className="mt-4 w-full bg-brillo-primario text-white font-extrabold text-lg py-4 border-4 border-transparent hover:border-white hover:-translate-y-1 transition-all shadow-[6px_6px_0px_0px_rgba(255,255,255,1)]">
-                {loading ? 'GUARDANDO...' : 'GUARDAR CAMBIO'}
-              </button>
-            </form>
+      {resumen.proxima && (
+        <div className="mb-4 flex items-center gap-4 rounded-2xl border border-accent/20 bg-accent/[0.06] p-4 animate-fade-up">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent text-canvas"><Icon name="clock" size={18} /></span>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-muted">Próximo cobro · {formatFecha(resumen.proxima.FechaOperacion)}</p>
+            <p className="truncate text-sm font-medium text-ink">{resumen.proxima.Comercio}</p>
           </div>
+          <span className="text-[15px] font-medium text-ink num">{formatMonto(resumen.proxima.Monto)}</span>
         </div>
       )}
+
+      <Segmented
+        className="mb-4"
+        value={filtro}
+        onChange={setFiltro}
+        options={[
+          { value: 'pendientes', label: 'Pendientes', count: resumen.pendientes },
+          { value: 'pagadas', label: 'Pagadas', count: resumen.pagadas },
+          { value: 'todas', label: 'Todas', count: cuotas.length },
+        ]}
+      />
+
+      <section className="card overflow-hidden animate-fade-up" style={{ animationDelay: '60ms' }}>
+        {cargando ? (
+          <ListSkeleton />
+        ) : filas.length === 0 ? (
+          <EmptyState
+            icon="card"
+            title={filtro === 'pendientes' ? 'Todo al día' : 'Sin cuotas'}
+            description={filtro === 'pendientes' ? 'No tienes cuotas pendientes de pago.' : 'Fracciona un gasto desde la sección Gastos para verlo aquí.'}
+          />
+        ) : (
+          <>
+            <ul className="divide-y divide-line md:hidden">
+              {filas.map(row => {
+                const c = row.original;
+                return (
+                  <li key={row.id} className="px-4 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-[15px] font-medium text-ink">{c.Comercio}</p>
+                        <p className="mt-0.5 text-xs text-faint">{formatFecha(c.FechaOperacion)}</p>
+                      </div>
+                      <span className="text-[15px] font-medium text-ink num">{formatMonto(c.Monto)}</span>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-2">
+                      <EstadoBadge cuota={c} />
+                      {!esPagada(c) && (
+                        <div className="flex gap-2">
+                          <button onClick={() => abrirModalEditar(c)} className="btn-secondary h-9 px-3 text-[13px]"><Icon name="edit" size={14} /> Editar</button>
+                          <button onClick={() => setCuotaPorPagar(c)} className="btn-primary h-9 px-3.5 text-[13px]"><Icon name="check" size={14} strokeWidth={2.25} /> Pagar</button>
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <div className="hidden overflow-x-auto md:block">
+              <table className="table-modern">
+                <thead>
+                  {table.getHeaderGroups().map(headerGroup => (
+                    <tr key={headerGroup.id}>
+                      {headerGroup.headers.map(header => (
+                        <th key={header.id}>
+                          {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                        </th>
+                      ))}
+                    </tr>
+                  ))}
+                </thead>
+                <tbody>
+                  {filas.map(row => (
+                    <tr key={row.id} className={`hover:bg-white/[0.025] ${esPagada(row.original) ? 'opacity-60' : ''}`}>
+                      {row.getVisibleCells().map(cell => (
+                        <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <Pagination table={table} />
+          </>
+        )}
+      </section>
+
+      {/* --- CONFIRMAR PAGO --- */}
+      <Modal open={!!cuotaPorPagar} onClose={() => setCuotaPorPagar(null)} title="Confirmar pago" subtitle={cuotaPorPagar?.Comercio} size="sm">
+        {cuotaPorPagar && (
+          <>
+            <div className="mb-6 rounded-2xl border border-line bg-canvas p-5 text-center">
+              <p className="eyebrow">Monto de la cuota</p>
+              <p className="mt-2 text-4xl font-medium tracking-tight text-ink num">{formatMonto(cuotaPorPagar.Monto)}</p>
+              <p className="mt-1.5 text-sm text-faint">Cobro del {formatFecha(cuotaPorPagar.FechaOperacion)}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => setCuotaPorPagar(null)} className="btn-secondary h-12">Cancelar</button>
+              <button onClick={confirmarPago} disabled={pagando} className="btn-primary h-12">
+                {pagando ? <><Spinner /> Pagando…</> : 'Marcar pagada'}
+              </button>
+            </div>
+          </>
+        )}
+      </Modal>
+
+      {/* --- EDITAR MONTO --- */}
+      <Modal open={isEditModalOpen && !!cuotaEditando} onClose={() => setIsEditModalOpen(false)} title="Ajustar monto" subtitle={cuotaEditando?.Comercio} size="sm">
+        <form onSubmit={guardarNuevoMonto} className="flex flex-col gap-5">
+          <Field label="Nuevo monto">
+            <AmountInput value={nuevoMonto} onChange={(e) => setNuevoMonto(e.target.value)} autoFocus />
+          </Field>
+          <button type="submit" disabled={loading} className="btn-primary h-12 w-full">
+            {loading ? <><Spinner /> Guardando…</> : 'Guardar cambio'}
+          </button>
+        </form>
+      </Modal>
     </Layout>
   );
 }

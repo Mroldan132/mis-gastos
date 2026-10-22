@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiAuth } from '../services/api';
+import { Icon, Spinner } from '../components/ui';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -28,7 +29,8 @@ export default function Login() {
         setError(response.data.Message || 'Credenciales incorrectas');
       }
     } catch (err) {
-      setError('Error al conectar con el servidor. Intenta de nuevo.');
+      // El backend responde 401 con un mensaje cuando el usuario o la contraseña no coinciden
+      setError(err.response?.data?.Message || 'No pudimos conectar con el servidor. Intenta de nuevo.');
       console.error(err);
     } finally {
       setLoading(false);
@@ -36,62 +38,99 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0b0f19] flex items-center justify-center relative overflow-hidden font-sans">
-      
-      {/* Efecto Glow de fondo (Esfera borrosa) más sutil */}
-      <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-indigo-600 rounded-full mix-blend-screen filter blur-[128px] opacity-20"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-emerald-600 rounded-full mix-blend-screen filter blur-[128px] opacity-10"></div>
+    <div className="relative grid min-h-screen bg-canvas text-ink lg:grid-cols-[1.1fr_1fr]">
+      {/* --- PANEL DE MARCA (PC) --- */}
+      <section className="relative hidden overflow-hidden border-r border-line lg:flex lg:flex-col lg:justify-between lg:p-14">
+        <div className="pointer-events-none absolute -left-40 -top-40 h-[600px] w-[600px] rounded-full bg-[radial-gradient(closest-side,rgba(212,247,90,0.14),transparent)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:56px_56px] [mask-image:radial-gradient(ellipse_at_top_left,black,transparent_70%)]" />
 
-      {/* Tarjeta Elegante */}
-      <div className="z-10 w-full max-w-md bg-slate-900/80 backdrop-blur-xl border border-gray-800 p-10 rounded-3xl shadow-2xl">
-        
-        <div className="text-center mb-10">
-          <h1 className="text-4xl font-bold text-white tracking-tight mb-2">
-            Hogar<span className="text-indigo-500">App</span>
-          </h1>
-          <p className="text-gray-400 font-medium">Control financiero inteligente</p>
+        <div className="relative flex items-center gap-2.5">
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-accent text-canvas">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" />
+            </svg>
+          </span>
+          <span className="text-base font-semibold tracking-tight">
+            Hogar<span className="font-display text-xl font-normal italic text-muted">app</span>
+          </span>
         </div>
 
-        <form onSubmit={handleLogin} className="flex flex-col gap-5">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Correo Electrónico</label>
-            <input 
-              type="email" 
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-slate-950/50 border border-gray-700 text-white px-4 py-3 rounded-xl outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 shadow-inner"
-              placeholder="tu@correo.com"
-              required
-            />
+        <div className="relative max-w-lg">
+          <h1 className="font-display text-7xl leading-[0.92] tracking-tight">
+            Tu dinero,<br />
+            <span className="italic text-accent">en calma.</span>
+          </h1>
+          <p className="mt-6 max-w-sm text-muted">
+            Los gastos de tus correos se registran solos. Tú solo decides a dónde va cada sol.
+          </p>
+        </div>
+
+        <div className="relative flex gap-8 text-sm text-faint">
+          <span className="flex items-center gap-2"><Icon name="sparkle" size={16} className="text-accent" /> Lectura automática</span>
+          <span className="flex items-center gap-2"><Icon name="card" size={16} className="text-accent" /> Cuotas</span>
+          <span className="flex items-center gap-2"><Icon name="target" size={16} className="text-accent" /> Metas de ahorro</span>
+        </div>
+      </section>
+
+      {/* --- FORMULARIO --- */}
+      <section className="relative flex items-center justify-center px-6 py-12">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-80 bg-[radial-gradient(70%_100%_at_50%_0%,rgba(212,247,90,0.08),transparent)] lg:hidden" />
+
+        <div className="relative w-full max-w-sm animate-fade-up">
+          <div className="mb-10 lg:hidden">
+            <span className="mb-8 grid h-11 w-11 place-items-center rounded-2xl bg-accent text-canvas">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" />
+              </svg>
+            </span>
+            <h1 className="font-display text-5xl leading-[0.95] tracking-tight">
+              Tu dinero,<br /><span className="italic text-accent">en calma.</span>
+            </h1>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Contraseña</label>
-            <input 
-              type="password" 
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-slate-950/50 border border-gray-700 text-white px-4 py-3 rounded-xl outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 shadow-inner"
-              placeholder="••••••••"
-              required
-            />
-          </div>
+          <h2 className="text-xl font-medium tracking-tight">Inicia sesión</h2>
+          <p className="mt-1.5 text-sm text-muted">Bienvenido de vuelta a tu hogar financiero.</p>
 
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl font-medium text-sm text-center">
-              {error}
-            </div>
-          )}
+          <form onSubmit={handleLogin} className="mt-8 flex flex-col gap-5">
+            <label className="block">
+              <span className="label">Correo electrónico</span>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="input"
+                placeholder="tu@correo.com"
+                autoComplete="email"
+                required
+              />
+            </label>
 
-          <button 
-            type="submit" 
-            disabled={loading}
-            className="mt-4 w-full bg-indigo-600 text-white font-medium text-lg py-3 rounded-xl shadow-lg shadow-indigo-500/25 hover:bg-indigo-500 transition-all active:translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Conectando...' : 'Iniciar Sesión'}
-          </button>
-        </form>
-      </div>
+            <label className="block">
+              <span className="label">Contraseña</span>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="input"
+                placeholder="••••••••"
+                autoComplete="current-password"
+                required
+              />
+            </label>
+
+            {error && (
+              <div className="flex items-start gap-2.5 rounded-xl border border-negative/20 bg-negative/[0.08] px-4 py-3 text-sm text-negative animate-fade-in">
+                <Icon name="x" size={16} className="mt-0.5" />
+                {error}
+              </div>
+            )}
+
+            <button type="submit" disabled={loading} className="btn-primary mt-2 h-12 w-full text-[15px]">
+              {loading ? <><Spinner /> Entrando…</> : <>Entrar <Icon name="chevronRight" size={18} /></>}
+            </button>
+          </form>
+        </div>
+      </section>
     </div>
   );
 }

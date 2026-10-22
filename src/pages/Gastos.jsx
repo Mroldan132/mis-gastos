@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
   useReactTable,
   getCoreRowModel,
@@ -8,26 +8,41 @@ import {
 } from '@tanstack/react-table';
 import Layout from '../components/Layout';
 import { apiGastos, apiCuotas } from '../services/api';
+import {
+  Icon, PageHeader, PeriodPicker, Segmented, Modal, Field, AmountInput, Avatar, EmptyState,
+  ListSkeleton, Pagination, Spinner,
+} from '../components/ui';
+import { formatMonto, formatFecha, formatHora, periodoActual, periodoTexto } from '../lib/format';
 
-// Función auxiliar para formatear la fecha
-const formatFecha = (valor) => {
-  if (!valor) return "";
-  const fecha = new Date(valor.includes("T") ? valor : `${valor}T00:00:00`);
-  return isNaN(fecha) ? valor : fecha.toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-};
+const CATEGORIAS = ['Comida', 'Transporte', 'Servicios', 'Hogar', 'Entretenimiento', 'Salud', 'Tecnología', 'Otros'];
+
+const esReferencia = (gasto) => gasto.EsGastoReferencia || gasto.EsPagoDeCuota;
+
+function EstadoBadge({ gasto }) {
+  if (gasto.EsPagoDeCuota) return <span className="badge border-line text-faint"><Icon name="card" size={12} /> Cuota</span>;
+  if (gasto.EsGastoReferencia) return <span className="badge border-line text-faint"><Icon name="split" size={12} /> Fraccionado</span>;
+  return null;
+}
+
+function Monto({ gasto, className = '' }) {
+  return (
+    <span className={`font-medium num ${gasto.Moneda === 'USD' ? 'text-positive' : 'text-ink'} ${className}`}>
+      {formatMonto(gasto.Monto, gasto.Moneda)}
+    </span>
+  );
+}
 
 export default function Gastos() {
   const [gastos, setGastos] = useState([]);
+  const [cargando, setCargando] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [periodo, setPeriodo] = useState(periodoActual);
 
-  const [filtroAnio, setFiltroAnio] = useState(new Date().getFullYear().toString());
-  const [filtroMes, setFiltroMes] = useState((new Date().getMonth() + 1).toString().padStart(2, '0'));
-
-  // NUEVOS ESTADOS: Buscador y Pestañas
+  // Buscador y pestañas
   const [globalFilter, setGlobalFilter] = useState('');
   const [tipoVista, setTipoVista] = useState('reales'); // 'todos', 'reales', 'referencias'
 
-  // Estados para Modal de Nuevo Gasto
+  // Modal de nuevo gasto
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [nuevoMonto, setNuevoMonto] = useState('');
   const [nuevaCategoria, setNuevaCategoria] = useState('Comida');
@@ -35,11 +50,11 @@ export default function Gastos() {
   const [moneda, setMoneda] = useState('PEN');
   const [tasaManual, setTasaManual] = useState(3.75);
 
-  // Estados para Modal de Detalle de Gasto
+  // Modal de detalle
   const [isDetalleModalOpen, setIsDetalleModalOpen] = useState(false);
   const [gastoDetalle, setGastoDetalle] = useState(null);
 
-  // Estados para Modal de Fraccionar
+  // Modal de fraccionar
   const [isFraccionarModalOpen, setIsFraccionarModalOpen] = useState(false);
   const [gastoSeleccionado, setGastoSeleccionado] = useState(null);
   const [cantidadCuotas, setCantidadCuotas] = useState('');
@@ -47,26 +62,26 @@ export default function Gastos() {
 
   const fetchGastos = async () => {
     const userId = localStorage.getItem('userId');
-    const periodo = `${filtroAnio}-${filtroMes}`;
     try {
-      const response = await apiGastos.get(`/gastos?userId=${userId}&mes=${periodo}`);
+      const response = await apiGastos.get(`/gastos?userId=${userId}&mes=${periodoTexto(periodo)}`);
       if (response.data.Success) setGastos(response.data.Gastos);
-    } catch (error) { console.error("Error cargando gastos:", error); }
+    } catch (error) {
+      console.error("Error cargando gastos:", error);
+    } finally {
+      setCargando(false);
+    }
   };
 
-  useEffect(() => { 
-    fetchGastos(); 
-    
-    // Obtener el tipo de cambio del día automáticamente al cargar
+  useEffect(() => {
+    setCargando(true);
+    fetchGastos();
+
+    // Tipo de cambio del día, sugerido al registrar gastos en dólares
     fetch('https://open.er-api.com/v6/latest/USD')
       .then(res => res.json())
-      .then(data => {
-        if (data?.rates?.PEN) {
-          setTasaManual(data.rates.PEN);
-        }
-      })
+      .then(data => { if (data?.rates?.PEN) setTasaManual(data.rates.PEN); })
       .catch(err => console.error("Error obteniendo tipo de cambio:", err));
-  }, [filtroAnio, filtroMes]);
+  }, [periodo]);
 
   const handleCrearGasto = async (e) => {
     e.preventDefault();
@@ -87,7 +102,7 @@ export default function Gastos() {
         setIsModalOpen(false);
         setNuevoMonto('');
         setNuevoComercio('');
-        setMoneda('PEN'); // Reset a soles
+        setMoneda('PEN');
         fetchGastos();
       }
     } catch (error) {
@@ -97,9 +112,14 @@ export default function Gastos() {
     }
   };
 
-  const abrirModalFraccionar = (rowData) => {
+  const abrirDetalle = (gasto) => {
+    setGastoDetalle(gasto);
+    setIsDetalleModalOpen(true);
+  };
+
+  const abrirModalFraccionar = (gasto) => {
     setIsDetalleModalOpen(false);
-    setGastoSeleccionado(rowData);
+    setGastoSeleccionado(gasto);
     setCantidadCuotas('');
     setIsFraccionarModalOpen(true);
   };
@@ -114,394 +134,336 @@ export default function Gastos() {
         CantidadCuotas: parseInt(cantidadCuotas)
       });
       if (response.data.Success) {
-        setIsFraccionarModalOpen(false);  
-        fetchGastos(); 
+        setIsFraccionarModalOpen(false);
+        fetchGastos();
       }
     } catch (error) { console.error(error); } finally { setFraccionarLoading(false); }
   };
 
-  // 1. Filtrar los gastos crudos según la pestaña seleccionada
-  const gastosFiltradosPorVista = useMemo(() => {
-    return gastos.filter(gasto => {
-      const esReferenciaOCuota = gasto.EsGastoReferencia || gasto.EsPagoDeCuota;
-      if (tipoVista === 'reales') return !esReferenciaOCuota;
-      if (tipoVista === 'referencias') return esReferenciaOCuota;
-      return true; // 'todos'
-    });
-  }, [gastos, tipoVista]);
+  // 1. Filtrar según la pestaña seleccionada
+  const conteo = useMemo(() => ({
+    reales: gastos.filter(g => !esReferencia(g)).length,
+    referencias: gastos.filter(esReferencia).length,
+    todos: gastos.length,
+  }), [gastos]);
 
-  // --- CONFIGURACIÓN DE TANSTACK TABLE ---
+  const gastosFiltradosPorVista = useMemo(() => gastos.filter(gasto => {
+    if (tipoVista === 'reales') return !esReferencia(gasto);
+    if (tipoVista === 'referencias') return esReferencia(gasto);
+    return true;
+  }), [gastos, tipoVista]);
+
+  // --- TANSTACK TABLE ---
   const columns = useMemo(() => [
-    { 
-      accessorKey: 'Comercio', 
+    {
+      accessorKey: 'Comercio',
       header: 'Comercio',
-      cell: (info) => <span className="font-bold">{info.getValue()}</span>
-    },
-    { 
-      accessorKey: 'Monto', 
-      header: () => <div className="text-right">Monto</div>,
-      cell: (info) => {
-        const monto = parseFloat(info.getValue());
-        const moneda = info.row.original.Moneda;
-        
-        return (
-          <div className="text-right w-full">
-            {moneda === 'USD' ? (
-              <span className="text-green-400 font-black text-sm">$ {monto.toFixed(2)}</span>
-            ) : (
-              <span className="text-white font-black text-sm">S/ {monto.toFixed(2)}</span>
-            )}
+      cell: (info) => (
+        <div className="flex items-center gap-3">
+          <Avatar text={info.getValue()} />
+          <div className="min-w-0">
+            <p className="truncate font-medium text-ink">{info.getValue()}</p>
+            {info.row.original.Banco && <p className="truncate text-xs text-faint">{info.row.original.Banco}</p>}
           </div>
-        );
-      }
+        </div>
+      )
     },
-    { 
-      accessorKey: 'FechaOperacion', 
+    {
+      accessorKey: 'Categoria',
+      header: 'Categoría',
+      cell: (info) => <span className="text-muted">{info.getValue()}</span>
+    },
+    {
+      accessorKey: 'FechaOperacion',
       header: 'Fecha',
-      cell: (info) => <span>{formatFecha(info.getValue())}</span>
+      cell: (info) => (
+        <span className="text-muted num">
+          {formatFecha(info.getValue())}
+          <span className="ml-2 text-faint">{formatHora(info.getValue())}</span>
+        </span>
+      )
     },
-    { 
-      accessorKey: 'Categoria', 
-      header: 'Categoría' 
-    },
-    { 
+    {
       id: 'Estado',
-      header: () => <div className="text-center">Estado</div>,
-      cell: (info) => {
-        const data = info.row.original;
-        return (
-          <div className="text-center">
-            {data.EsGastoReferencia || data.EsPagoDeCuota ? (
-              <span className="text-gray-500 text-xs italic font-bold">No aplicable</span>
-            ) : (
-              <span className="text-brillo-primario text-xs font-bold border border-brillo-primario px-1 rounded">Normal</span>
-            )}
-          </div>
-        );
-      }
-    }
+      header: 'Estado',
+      cell: (info) => <EstadoBadge gasto={info.row.original} />
+    },
+    {
+      accessorKey: 'Monto',
+      header: () => <div className="text-right">Monto</div>,
+      cell: (info) => <div className="text-right"><Monto gasto={info.row.original} /></div>
+    },
   ], []);
 
   const table = useReactTable({
-    data: gastosFiltradosPorVista, // Usamos la data pre-filtrada por las pestañas
+    data: gastosFiltradosPorVista,
     columns,
-    state: {
-      globalFilter, // Estado del buscador conectado a Tanstack
-    },
+    state: { globalFilter },
     onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(), // Necesario para el buscador
+    getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    initialState: {
-      pagination: {
-        pageSize: 10,
-      },
-    },
+    initialState: { pagination: { pageSize: 12 } },
   });
 
-  // 2. Calcular totales sobre las filas resultantes de Tanstack (aplica filtro de pestaña + buscador)
+  // 2. Totales sobre las filas visibles (pestaña + buscador)
+  const filasFiltradas = table.getFilteredRowModel().rows;
   const totales = useMemo(() => {
     let totalPEN = 0;
     let totalUSD = 0;
-    
-    // getFilteredRowModel() devuelve las filas después de aplicar el globalFilter
-    table.getFilteredRowModel().rows.forEach(row => {
+    filasFiltradas.forEach(row => {
       const monto = parseFloat(row.original.Monto);
-      if (row.original.Moneda === 'USD') {
-        totalUSD += monto;
-      } else {
-        totalPEN += monto;
-      }
+      if (row.original.Moneda === 'USD') totalUSD += monto;
+      else totalPEN += monto;
     });
-
     return { totalPEN, totalUSD };
-  }, [table.getFilteredRowModel().rows]);
+  }, [filasFiltradas]);
+
+  const filas = table.getRowModel().rows;
 
   return (
     <Layout>
-      <header className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-4xl font-extrabold uppercase tracking-tight text-white">Mis Gastos</h1>
-          <div className="flex items-center gap-2 mt-2">
-            <select value={filtroMes} onChange={(e) => setFiltroMes(e.target.value)} className="bg-slate-800 border-2 border-brillo-primario text-white px-2 py-1 font-bold outline-none cursor-pointer">
-              <option value="01">Enero</option><option value="02">Febrero</option><option value="03">Marzo</option>
-              <option value="04">Abril</option><option value="05">Mayo</option><option value="06">Junio</option>
-              <option value="07">Julio</option><option value="08">Agosto</option><option value="09">Septiembre</option>
-              <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
-            </select>
-            <select value={filtroAnio} onChange={(e) => setFiltroAnio(e.target.value)} className="bg-slate-800 border-2 border-brillo-primario text-white px-2 py-1 font-bold outline-none cursor-pointer">
-              <option value="2024">2024</option><option value="2025">2025</option><option value="2026">2026</option>
-            </select>
-          </div>
-        </div>
-        <button onClick={() => setIsModalOpen(true)} className="bg-acento-neobrutal text-slate-900 font-extrabold px-6 py-3 border-4 border-transparent hover:border-white shadow-[4px_4px_0px_0px_rgba(255,255,255,1)] hover:-translate-y-1 transition-all">
-          + NUEVO GASTO
-        </button>
-      </header>
+      <PageHeader
+        eyebrow="Movimientos"
+        title="Gastos"
+        actions={
+          <>
+            <PeriodPicker periodo={periodo} onChange={setPeriodo} />
+            <button onClick={() => setIsModalOpen(true)} className="btn-primary w-11 px-0 md:w-auto md:px-4" aria-label="Nuevo gasto">
+              <Icon name="plus" size={18} /> <span className="hidden md:inline">Nuevo gasto</span>
+            </button>
+          </>
+        }
+      />
 
-      {/* --- PANEL DE CONTROLES: PESTAÑAS Y BUSCADOR --- */}
-      <div className="flex flex-col md:flex-row justify-between items-end gap-4 mb-6">
-        <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
-          <button 
-            onClick={() => setTipoVista('reales')}
-            className={`px-4 py-2 font-extrabold uppercase text-xs transition-all border-2 ${tipoVista === 'reales' ? 'bg-brillo-primario text-white border-transparent shadow-[4px_4px_0px_0px_rgba(255,255,255,1)]' : 'bg-slate-800 text-gray-400 border-gray-600 hover:text-white'}`}
-          >
-            Gastos Reales
-          </button>
-          <button 
-            onClick={() => setTipoVista('referencias')}
-            className={`px-4 py-2 font-extrabold uppercase text-xs transition-all border-2 ${tipoVista === 'referencias' ? 'bg-gray-400 text-slate-900 border-transparent shadow-[4px_4px_0px_0px_rgba(255,255,255,1)]' : 'bg-slate-800 text-gray-400 border-gray-600 hover:text-white'}`}
-          >
-            Referencias / Cuotas
-          </button>
-          <button 
-            onClick={() => setTipoVista('todos')}
-            className={`px-4 py-2 font-extrabold uppercase text-xs transition-all border-2 ${tipoVista === 'todos' ? 'bg-white text-slate-900 border-transparent shadow-[4px_4px_0px_0px_rgba(139,92,246,1)]' : 'bg-slate-800 text-gray-400 border-gray-600 hover:text-white'}`}
-          >
-            Ver Todos
-          </button>
+      {/* --- TOTALES --- */}
+      <div className="mb-4 grid grid-cols-2 gap-3 md:gap-4 animate-fade-up">
+        <div className="card p-4 md:p-5">
+          <p className="eyebrow">Total en soles</p>
+          <p className="mt-3 text-xl font-medium tracking-tight text-ink num md:text-2xl">{formatMonto(totales.totalPEN)}</p>
         </div>
+        <div className="card p-4 md:p-5">
+          <p className="eyebrow">Total en dólares</p>
+          <p className="mt-3 text-xl font-medium tracking-tight text-positive num md:text-2xl">{formatMonto(totales.totalUSD, 'USD')}</p>
+        </div>
+      </div>
 
-        <div className="w-full md:w-1/3 relative">
-          <input 
-            type="text" 
-            placeholder="Buscar comercio o categoría..." 
+      {/* --- CONTROLES --- */}
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between animate-fade-up" style={{ animationDelay: '60ms' }}>
+        <Segmented
+          value={tipoVista}
+          onChange={setTipoVista}
+          options={[
+            { value: 'reales', label: 'Reales', count: conteo.reales },
+            { value: 'referencias', label: 'Cuotas', count: conteo.referencias },
+            { value: 'todos', label: 'Todos', count: conteo.todos },
+          ]}
+        />
+        <div className="relative md:w-80">
+          <Icon name="search" size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-faint" />
+          <input
+            type="search"
+            placeholder="Buscar comercio o categoría"
             value={globalFilter ?? ''}
             onChange={(e) => setGlobalFilter(e.target.value)}
-            className="w-full bg-slate-800 border-2 border-gray-600 focus:border-acento-neobrutal text-white px-4 py-2 outline-none font-bold placeholder-gray-500 transition-colors"
+            className="input h-11 pl-11 pr-10"
           />
           {globalFilter && (
-            <button 
-              onClick={() => setGlobalFilter('')} 
-              className="absolute right-3 top-2.5 text-gray-400 hover:text-white font-bold"
-            >
-              ✕
+            <button onClick={() => setGlobalFilter('')} className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-faint hover:bg-white/10 hover:text-ink" aria-label="Limpiar búsqueda">
+              <Icon name="x" size={14} />
             </button>
           )}
         </div>
       </div>
 
-      {/* --- PANEL DE RESUMEN DE TOTALES --- */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="bg-slate-800 p-4 border-2 border-gray-700 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-center">
-          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">Total Mostrado (Soles)</p>
-          <p className="text-2xl font-black text-white">S/ {totales.totalPEN.toFixed(2)}</p>
-        </div>
-        <div className="bg-slate-800 p-4 border-2 border-gray-700 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-center">
-          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">Total Mostrado (Dólares)</p>
-          <p className="text-2xl font-black text-green-400">$ {totales.totalUSD.toFixed(2)}</p>
-        </div>
-      </div>
-
-      {/* --- TABLA CON TANSTACK REACT TABLE --- */}
-      <div className="bg-slate-900 border-2 border-gray-700 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-1 mb-8">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              {table.getHeaderGroups().map(headerGroup => (
-                <tr key={headerGroup.id} className="border-b-2 border-gray-700 bg-slate-800">
-                  {headerGroup.headers.map(header => (
-                    <th key={header.id} className="p-4 font-extrabold text-gray-300 uppercase tracking-wider text-xs">
-                      {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                    </th>
-                  ))}
-                </tr>
-              ))}
-            </thead>
-            <tbody>
-              {table.getRowModel().rows.map(row => {
-                const esReferencia = row.original.EsGastoReferencia || row.original.EsPagoDeCuota;
+      {/* --- LISTA --- */}
+      <section className="card overflow-hidden animate-fade-up" style={{ animationDelay: '120ms' }}>
+        {cargando ? (
+          <ListSkeleton />
+        ) : filas.length === 0 ? (
+          <EmptyState
+            icon="receipt"
+            title={globalFilter ? 'Sin resultados' : 'Sin gastos en este periodo'}
+            description={globalFilter ? `No encontramos nada para "${globalFilter}".` : 'Los gastos de tus correos aparecerán aquí automáticamente.'}
+          />
+        ) : (
+          <>
+            {/* Celular: lista */}
+            <ul className="divide-y divide-line md:hidden">
+              {filas.map(row => {
+                const g = row.original;
                 return (
-                  <tr 
-                    key={row.id}
-                    onClick={() => {
-                      setGastoDetalle(row.original);
-                      setIsDetalleModalOpen(true);
-                    }}
-                    className={`
-                      cursor-pointer border-b border-gray-800 hover:bg-slate-800 transition-colors
-                      ${esReferencia ? 'opacity-40 hover:opacity-80' : 'opacity-100'}
-                    `}
-                  >
-                    {row.getVisibleCells().map(cell => (
-                      <td key={cell.id} className="p-4 text-sm text-gray-200">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
-                    ))}
-                  </tr>
+                  <li key={row.id}>
+                    <button onClick={() => abrirDetalle(g)} className={`flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors active:bg-white/[0.04] ${esReferencia(g) ? 'opacity-60' : ''}`}>
+                      <Avatar text={g.Comercio} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[15px] font-medium text-ink">{g.Comercio}</p>
+                        <p className="mt-0.5 truncate text-xs text-faint">
+                          {g.Categoria} · {formatFecha(g.FechaOperacion)}
+                        </p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <Monto gasto={g} className="text-[15px]" />
+                        {esReferencia(g) && <span className="text-[11px] text-faint">{g.EsPagoDeCuota ? 'Cuota' : 'Fraccionado'}</span>}
+                      </div>
+                    </button>
+                  </li>
                 );
               })}
-              {table.getRowModel().rows.length === 0 && (
-                <tr>
-                  <td colSpan={columns.length} className="p-10 text-center text-gray-500 font-bold uppercase bg-slate-800/50">
-                    No se encontraron gastos con estos filtros
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+            </ul>
 
-        {/* CONTROLES DE PAGINACIÓN NEOBRUTALISTAS */}
-        {table.getPageCount() > 1 && (
-          <div className="flex items-center justify-between p-4 bg-slate-900 border-t-2 border-gray-700">
-            <button
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-              className="bg-slate-800 text-white font-bold px-4 py-2 border-2 border-gray-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-white transition-colors uppercase text-xs"
-            >
-              Anterior
-            </button>
-            <span className="text-gray-300 font-bold text-sm">
-              Página {table.getState().pagination.pageIndex + 1} de {table.getPageCount()}
-            </span>
-            <button
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-              className="bg-slate-800 text-white font-bold px-4 py-2 border-2 border-gray-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-white transition-colors uppercase text-xs"
-            >
-              Siguiente
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* --- 1. MODAL DE DETALLE DEL GASTO --- */}
-      {isDetalleModalOpen && gastoDetalle && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border-4 border-white p-6 max-w-sm w-full shadow-[12px_12px_0px_0px_rgba(255,255,255,1)] relative animate-fade-in">
-            <button onClick={() => setIsDetalleModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white font-black text-xl">✕</button>
-            
-            <p className="text-gray-400 font-bold uppercase text-xs mb-1">Detalle del Gasto</p>
-            <h2 className="text-3xl font-extrabold text-white mb-6 uppercase tracking-tight break-words leading-tight">
-              {gastoDetalle.Comercio}
-            </h2>
-
-            <div className="flex flex-col gap-4 mb-8">
-              <div className="bg-slate-800 p-4 border-l-4 border-acento-neobrutal flex justify-between items-center">
-                <span className="text-sm text-gray-400 font-bold uppercase">Monto</span>
-                <span className={`text-3xl font-black ${gastoDetalle.Moneda === 'USD' ? 'text-green-400' : 'text-white'}`}>
-                  {gastoDetalle.Moneda === 'USD' ? '$' : 'S/'} {gastoDetalle.Monto.toFixed(2)}
-                </span>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-slate-800 p-3 border-2 border-gray-700">
-                  <p className="text-[10px] text-gray-400 font-bold uppercase">Fecha</p>
-                  <p className="text-sm font-bold text-white mt-1">{formatFecha(gastoDetalle.FechaOperacion).split(',')[0]}</p>
-                </div>
-                <div className="bg-slate-800 p-3 border-2 border-gray-700">
-                  <p className="text-[10px] text-gray-400 font-bold uppercase">Categoría</p>
-                  <p className="text-sm font-bold text-white mt-1">{gastoDetalle.Categoria}</p>
-                </div>
-              </div>
+            {/* PC: tabla */}
+            <div className="hidden overflow-x-auto md:block">
+              <table className="table-modern">
+                <thead>
+                  {table.getHeaderGroups().map(headerGroup => (
+                    <tr key={headerGroup.id}>
+                      {headerGroup.headers.map(header => (
+                        <th key={header.id}>
+                          {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                        </th>
+                      ))}
+                    </tr>
+                  ))}
+                </thead>
+                <tbody>
+                  {filas.map(row => (
+                    <tr
+                      key={row.id}
+                      onClick={() => abrirDetalle(row.original)}
+                      className={`cursor-pointer hover:bg-white/[0.025] ${esReferencia(row.original) ? 'opacity-55 hover:opacity-90' : ''}`}
+                    >
+                      {row.getVisibleCells().map(cell => (
+                        <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
-            {(!gastoDetalle.EsGastoReferencia && !gastoDetalle.EsPagoDeCuota) ? (
-              <button 
-                onClick={() => abrirModalFraccionar(gastoDetalle)}
-                className="w-full bg-brillo-primario text-white font-extrabold text-lg py-4 border-4 border-transparent hover:border-white transition-all shadow-[6px_6px_0px_0px_rgba(255,255,255,1)]"
-              >
-                💳 FRACCIONAR EN CUOTAS
+            <Pagination table={table} />
+          </>
+        )}
+      </section>
+
+      {/* --- 1. DETALLE --- */}
+      <Modal open={isDetalleModalOpen && !!gastoDetalle} onClose={() => setIsDetalleModalOpen(false)} title={gastoDetalle?.Comercio} subtitle={gastoDetalle?.Banco}>
+        {gastoDetalle && (
+          <>
+            <div className="mb-5 rounded-2xl border border-line bg-canvas p-5 text-center">
+              <p className="eyebrow">Monto</p>
+              <p className={`mt-2 text-4xl font-medium tracking-tight num ${gastoDetalle.Moneda === 'USD' ? 'text-positive' : 'text-ink'}`}>
+                {formatMonto(gastoDetalle.Monto, gastoDetalle.Moneda)}
+              </p>
+              {gastoDetalle.Moneda === 'USD' && gastoDetalle.MontoPEN > 0 && (
+                <p className="mt-1.5 text-sm text-faint num">≈ {formatMonto(gastoDetalle.MontoPEN)} · TC {gastoDetalle.TipoCambio}</p>
+              )}
+            </div>
+
+            <dl className="mb-6 divide-y divide-line rounded-2xl border border-line">
+              {[
+                ['Fecha', `${formatFecha(gastoDetalle.FechaOperacion)} ${formatHora(gastoDetalle.FechaOperacion)}`],
+                ['Categoría', gastoDetalle.Categoria],
+                ['Estado', gastoDetalle.EsPagoDeCuota ? 'Cuota' : gastoDetalle.EsGastoReferencia ? 'Fraccionado' : 'Gasto normal'],
+              ].map(([k, v]) => (
+                <div key={k} className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
+                  <dt className="text-faint">{k}</dt>
+                  <dd className="text-right text-ink num">{v}</dd>
+                </div>
+              ))}
+            </dl>
+
+            {!esReferencia(gastoDetalle) ? (
+              <button onClick={() => abrirModalFraccionar(gastoDetalle)} className="btn-primary h-12 w-full">
+                <Icon name="split" size={18} /> Fraccionar en cuotas
               </button>
             ) : (
-              <div className="w-full bg-gray-800 text-gray-400 text-center font-bold text-sm py-4 border-2 border-gray-700">
-                {gastoDetalle.EsPagoDeCuota ? "Este gasto es una cuota" : "Este gasto ya fue fraccionado"}
+              <p className="rounded-xl bg-white/[0.04] px-4 py-3 text-center text-sm text-muted">
+                {gastoDetalle.EsPagoDeCuota ? 'Este gasto es una cuota.' : 'Este gasto ya fue fraccionado.'}
+              </p>
+            )}
+          </>
+        )}
+      </Modal>
+
+      {/* --- 2. NUEVO GASTO --- */}
+      <Modal open={isModalOpen} onClose={() => setIsModalOpen(false)} title="Nuevo gasto" subtitle="Registra un gasto que no llegó por correo.">
+        <form onSubmit={handleCrearGasto} className="flex flex-col gap-5">
+          <div>
+            <span className="label">Moneda</span>
+            <Segmented
+              value={moneda}
+              onChange={setMoneda}
+              options={[{ value: 'PEN', label: 'Soles (S/)' }, { value: 'USD', label: 'Dólares ($)' }]}
+            />
+          </div>
+
+          <Field label="Monto">
+            <AmountInput value={nuevoMonto} onChange={(e) => setNuevoMonto(e.target.value)} moneda={moneda} />
+          </Field>
+
+          {moneda === 'USD' && (
+            <Field label="Tipo de cambio" hint="Sugerido según el mercado de hoy. Puedes ajustarlo.">
+              <input type="number" inputMode="decimal" step="0.001" value={tasaManual} onChange={(e) => setTasaManual(e.target.value)} className="input num" required />
+            </Field>
+          )}
+
+          <Field label="Comercio">
+            <input type="text" value={nuevoComercio} onChange={(e) => setNuevoComercio(e.target.value)} className="input" placeholder="Ej. Supermercado" required />
+          </Field>
+
+          <Field label="Categoría">
+            <select value={nuevaCategoria} onChange={(e) => setNuevaCategoria(e.target.value)} className="input">
+              {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </Field>
+
+          <button type="submit" disabled={loading} className="btn-primary mt-1 h-12 w-full">
+            {loading ? <><Spinner /> Guardando…</> : 'Guardar gasto'}
+          </button>
+        </form>
+      </Modal>
+
+      {/* --- 3. FRACCIONAR --- */}
+      <Modal
+        open={isFraccionarModalOpen && !!gastoSeleccionado}
+        onClose={() => setIsFraccionarModalOpen(false)}
+        title="Fraccionar"
+        subtitle={gastoSeleccionado && `${gastoSeleccionado.Comercio} · ${formatMonto(gastoSeleccionado.Monto, gastoSeleccionado.Moneda)}`}
+        size="sm"
+      >
+        {gastoSeleccionado && (
+          <form onSubmit={confirmarFraccionamiento} className="flex flex-col gap-5">
+            <Field label="¿En cuántas cuotas?">
+              <div className="grid grid-cols-4 gap-2">
+                {[3, 6, 12, 24].map(n => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setCantidadCuotas(String(n))}
+                    className={`h-11 rounded-xl border text-sm font-medium transition-colors num ${String(n) === cantidadCuotas ? 'border-accent bg-accent/10 text-accent' : 'border-line text-muted hover:border-line-strong'}`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <input type="number" inputMode="numeric" min="2" max="36" value={cantidadCuotas} onChange={(e) => setCantidadCuotas(e.target.value)} className="input mt-2 text-center num" placeholder="Otra cantidad (2 – 36)" required />
+            </Field>
+
+            {Number(cantidadCuotas) >= 2 && (
+              <div className="flex items-center justify-between rounded-xl bg-white/[0.04] px-4 py-3 text-sm animate-fade-in">
+                <span className="text-muted">Cuota mensual aprox.</span>
+                <span className="font-medium text-ink num">{formatMonto(gastoSeleccionado.Monto / Number(cantidadCuotas), gastoSeleccionado.Moneda)}</span>
               </div>
             )}
-          </div>
-        </div>
-      )}
 
-      {/* --- 2. MODAL NUEVO GASTO --- */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border-4 border-acento-neobrutal p-8 max-w-md w-full shadow-[12px_12px_0px_0px_rgba(16,185,129,1)] relative">
-            <button onClick={() => setIsModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white font-black text-xl">✕</button>
-            <h2 className="text-3xl font-extrabold text-white mb-6 uppercase tracking-tight">Registrar Gasto</h2>
-            <form onSubmit={handleCrearGasto} className="flex flex-col gap-5">
-              
-              <div>
-                <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Comercio</label>
-                <input type="text" value={nuevoComercio} onChange={(e) => setNuevoComercio(e.target.value)} className="w-full bg-slate-800 border-2 border-gray-600 focus:border-acento-neobrutal text-white px-4 py-3 outline-none" required />
-              </div>
-
-              {/* FILA 1: MONEDA Y MONTO */}
-              <div className="flex gap-4">
-                <div className="w-1/3">
-                  <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Moneda</label>
-                  <select 
-                    value={moneda} 
-                    onChange={(e) => setMoneda(e.target.value)}
-                    className="w-full bg-slate-800 border-2 border-gray-600 focus:border-acento-neobrutal text-white px-4 py-3 outline-none appearance-none cursor-pointer"
-                  >
-                    <option value="PEN">Soles</option>
-                    <option value="USD">Dólares</option>
-                  </select>
-                </div>
-                <div className="flex-1">
-                  <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Monto</label>
-                  <input 
-                    type="number" 
-                    step="0.01" 
-                    value={nuevoMonto} 
-                    onChange={(e) => setNuevoMonto(e.target.value)} 
-                    className="w-full bg-slate-800 border-2 border-gray-600 focus:border-acento-neobrutal text-white px-4 py-3 outline-none" 
-                    required 
-                  />
-                </div>
-              </div>
-
-              {/* FILA 2: TIPO DE CAMBIO */}
-              {moneda === 'USD' && (
-                <div className="animate-slide-down">
-                  <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Tipo de Cambio Aplicado</label>
-                  <input 
-                    type="number" 
-                    step="0.001" 
-                    value={tasaManual} 
-                    onChange={(e) => setTasaManual(e.target.value)} 
-                    className="w-full bg-slate-800 border-2 border-brillo-primario text-white px-4 py-3 outline-none font-black text-xl text-center shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] focus:shadow-[4px_4px_0px_0px_rgba(139,92,246,1)]" 
-                    required 
-                  />
-                  <p className="text-[10px] text-brillo-primario font-bold mt-1 uppercase text-center">Sugerido por la API de mercado</p>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Categoría</label>
-                <select value={nuevaCategoria} onChange={(e) => setNuevaCategoria(e.target.value)} className="w-full bg-slate-800 border-2 border-gray-600 focus:border-acento-neobrutal text-white px-4 py-3 outline-none">
-                  <option value="Comida">Comida</option><option value="Transporte">Transporte</option><option value="Servicios">Servicios</option><option value="Hogar">Hogar</option><option value="Entretenimiento">Entretenimiento</option><option value="Salud">Salud</option><option value="Tecnología">Tecnología</option><option value="Otros">Otros</option>
-                </select>
-              </div>
-
-              <button type="submit" disabled={loading} className="mt-4 w-full bg-acento-neobrutal text-slate-900 font-extrabold text-lg py-4 border-4 border-transparent hover:border-white hover:-translate-y-1 transition-all shadow-[6px_6px_0px_0px_rgba(255,255,255,1)]">
-                {loading ? 'GUARDANDO...' : 'GUARDAR GASTO'}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* --- 3. MODAL FRACCIONAR --- */}
-      {isFraccionarModalOpen && gastoSeleccionado && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border-4 border-brillo-primario p-8 max-w-md w-full shadow-[12px_12px_0px_0px_rgba(139,92,246,1)] relative">
-            <button onClick={() => setIsFraccionarModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white font-black text-xl">✕</button>
-            <h2 className="text-3xl font-extrabold text-white mb-2 uppercase tracking-tight">Fraccionar Gasto</h2>
-            <p className="text-gray-400 mb-6 font-bold text-sm">Dividirás "{gastoSeleccionado.Comercio}" de {gastoSeleccionado.Moneda === 'USD' ? '$' : 'S/'} {gastoSeleccionado.Monto}.</p>
-            <form onSubmit={confirmarFraccionamiento} className="flex flex-col gap-5">
-              <div>
-                <label className="block text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">¿En cuántas cuotas?</label>
-                <input type="number" min="2" max="36" value={cantidadCuotas} onChange={(e) => setCantidadCuotas(e.target.value)} className="w-full bg-slate-800 border-2 border-brillo-primario text-white px-4 py-3 outline-none text-2xl font-black text-center shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] focus:shadow-[4px_4px_0px_0px_rgba(139,92,246,1)]" required />
-              </div>
-              <button type="submit" disabled={fraccionarLoading} className="mt-4 w-full bg-brillo-primario text-white font-extrabold text-lg py-4 border-4 border-transparent hover:border-white hover:-translate-y-1 transition-all shadow-[6px_6px_0px_0px_rgba(255,255,255,1)]">
-                {fraccionarLoading ? 'PROCESANDO...' : 'CONFIRMAR CUOTAS'}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
+            <button type="submit" disabled={fraccionarLoading} className="btn-primary h-12 w-full">
+              {fraccionarLoading ? <><Spinner /> Procesando…</> : 'Confirmar cuotas'}
+            </button>
+          </form>
+        )}
+      </Modal>
     </Layout>
   );
 }
