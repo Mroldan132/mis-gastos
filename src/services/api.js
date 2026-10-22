@@ -6,6 +6,7 @@ const API_INGRESOS_URL = 'https://pp4091dt4e.execute-api.us-east-2.amazonaws.com
 const API_DASHBOARD_URL = 'https://1vdl5vxqm6.execute-api.us-east-2.amazonaws.com';
 const API_CUOTAS_URL = 'https://m4ixixlyo9.execute-api.us-east-2.amazonaws.com';
 const API_METAS_URL = 'https://x3rfewotne.execute-api.us-east-2.amazonaws.com';
+const API_PLAN_URL = 'https://hxjbn8huck.execute-api.us-east-2.amazonaws.com'; // Presupuestos, pagos fijos y hogar
 
 
 // 2. Exportamos las instancias configuradas
@@ -39,8 +40,17 @@ export const apiMetas = axios.create({
     headers: { 'Content-Type': 'application/json' }
 });
 
+export const apiPlan = axios.create({
+    baseURL: API_PLAN_URL,
+    headers: { 'Content-Type': 'application/json' }
+});
+
+// Mensaje de error que devuelve el backend, o uno genérico si no hay respuesta
+export const mensajeDeError = (error, porDefecto = 'No pudimos completar la acción. Intenta de nuevo.') =>
+    error?.response?.data?.Message || porDefecto;
+
 // 3. Todas las APIs (menos el login) envian el token y, si el backend lo rechaza, se vuelve al login
-[apiGastos, apiIngresos, apiDashboard, apiCuotas, apiMetas].forEach((api) => {
+[apiGastos, apiIngresos, apiDashboard, apiCuotas, apiMetas, apiPlan].forEach((api) => {
     api.interceptors.request.use((config) => {
         const token = localStorage.getItem('token');
         if (token) config.headers.Authorization = `Bearer ${token}`;

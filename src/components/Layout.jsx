@@ -1,12 +1,28 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Icon } from './ui';
 
-const navItems = [
+// Barra lateral (PC): todas las secciones
+const seccionesPC = [
+  { titulo: 'Día a día', items: [
+    { name: 'Resumen', path: '/dashboard', icon: 'dashboard' },
+    { name: 'Gastos', path: '/gastos', icon: 'receipt' },
+    { name: 'Plan del mes', path: '/plan', icon: 'calendar' },
+    { name: 'Hogar', path: '/hogar', icon: 'users' },
+  ]},
+  { titulo: 'Finanzas', items: [
+    { name: 'Ingresos', path: '/ingresos', icon: 'wallet' },
+    { name: 'Cuotas', path: '/cuotas', icon: 'card' },
+    { name: 'Metas', path: '/metas', icon: 'target' },
+  ]},
+];
+
+// Barra inferior (celular): máximo 5 accesos; el resto vive en "Más"
+const navCelular = [
   { name: 'Resumen', path: '/dashboard', icon: 'dashboard' },
   { name: 'Gastos', path: '/gastos', icon: 'receipt' },
-  { name: 'Ingresos', path: '/ingresos', icon: 'wallet' },
-  { name: 'Cuotas', path: '/cuotas', icon: 'card' },
-  { name: 'Metas', path: '/metas', icon: 'target' },
+  { name: 'Plan', path: '/plan', icon: 'calendar' },
+  { name: 'Hogar', path: '/hogar', icon: 'users' },
+  { name: 'Más', path: '/mas', icon: 'grid', incluye: ['/mas', '/ingresos', '/cuotas', '/metas'] },
 ];
 
 function Logo() {
@@ -26,6 +42,7 @@ function Logo() {
 
 export default function Layout({ children }) {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
 
   const handleLogout = () => {
     localStorage.clear();
@@ -43,26 +60,30 @@ export default function Layout({ children }) {
           <Logo />
         </div>
 
-        <nav className="flex flex-1 flex-col gap-1 px-3">
-          <p className="eyebrow px-3 pb-2">Menú</p>
-          {navItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) =>
-                `group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-                  isActive ? 'bg-white/[0.06] text-ink' : 'text-faint hover:bg-white/[0.03] hover:text-muted'
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  {isActive && <span className="absolute -left-3 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-accent" />}
-                  <Icon name={item.icon} size={18} className={isActive ? 'text-accent' : ''} />
-                  {item.name}
-                </>
-              )}
-            </NavLink>
+        <nav className="flex flex-1 flex-col gap-6 overflow-y-auto px-3">
+          {seccionesPC.map(seccion => (
+            <div key={seccion.titulo} className="flex flex-col gap-1">
+              <p className="eyebrow px-3 pb-2">{seccion.titulo}</p>
+              {seccion.items.map((item) => (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  className={({ isActive }) =>
+                    `group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+                      isActive ? 'bg-white/[0.06] text-ink' : 'text-faint hover:bg-white/[0.03] hover:text-muted'
+                    }`
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      {isActive && <span className="absolute -left-3 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-accent" />}
+                      <Icon name={item.icon} size={18} className={isActive ? 'text-accent' : ''} />
+                      {item.name}
+                    </>
+                  )}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
 
@@ -91,24 +112,21 @@ export default function Layout({ children }) {
       {/* --- NAVEGACIÓN INFERIOR (CELULAR) --- */}
       <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-canvas/85 backdrop-blur-xl md:hidden">
         <div className="grid grid-cols-5 px-2 pt-1.5 pb-1">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) =>
-                `flex flex-col items-center gap-1 rounded-xl py-1.5 text-[10.5px] font-medium transition-colors ${isActive ? 'text-ink' : 'text-faint'}`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <span className={`grid h-8 w-14 place-items-center rounded-full transition-all duration-300 ${isActive ? 'bg-accent text-canvas' : ''}`}>
-                    <Icon name={item.icon} size={19} />
-                  </span>
-                  {item.name}
-                </>
-              )}
-            </NavLink>
-          ))}
+          {navCelular.map((item) => {
+            const activo = item.incluye ? item.incluye.includes(pathname) : pathname === item.path;
+            return (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className={`flex flex-col items-center gap-1 rounded-xl py-1.5 text-[10.5px] font-medium transition-colors ${activo ? 'text-ink' : 'text-faint'}`}
+              >
+                <span className={`grid h-8 w-14 place-items-center rounded-full transition-all duration-300 ${activo ? 'bg-accent text-canvas' : ''}`}>
+                  <Icon name={item.icon} size={19} />
+                </span>
+                {item.name}
+              </NavLink>
+            );
+          })}
         </div>
       </nav>
     </div>

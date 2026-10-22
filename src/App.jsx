@@ -3,8 +3,12 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Gastos from './pages/Gastos';
 import Ingresos from './pages/Ingresos';
-import Cuotas from './pages/Cuotas'; 
+import Cuotas from './pages/Cuotas';
 import Metas from "./pages/Metas";
+import Plan from './pages/Plan';
+import Hogar from './pages/Hogar';
+import Mas from './pages/Mas';
+
 function App() {
   return (
     <Router>
@@ -16,6 +20,9 @@ function App() {
         <Route path="/ingresos" element={<Ingresos />} />
         <Route path="/cuotas" element={<Cuotas />} />
         <Route path="/metas" element={<Metas />} />
+        <Route path="/plan" element={<Plan />} />
+        <Route path="/hogar" element={<Hogar />} />
+        <Route path="/mas" element={<Mas />} />
       </Routes>
     </Router>
   );
