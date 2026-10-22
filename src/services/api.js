@@ -34,7 +34,27 @@ export const apiCuotas = axios.create({
     headers: { 'Content-Type': 'application/json' } 
 });
 
-export const apiMetas = axios.create({ 
-    baseURL: API_METAS_URL, 
-    headers: { 'Content-Type': 'application/json' } 
+export const apiMetas = axios.create({
+    baseURL: API_METAS_URL,
+    headers: { 'Content-Type': 'application/json' }
+});
+
+// 3. Todas las APIs (menos el login) envian el token y, si el backend lo rechaza, se vuelve al login
+[apiGastos, apiIngresos, apiDashboard, apiCuotas, apiMetas].forEach((api) => {
+    api.interceptors.request.use((config) => {
+        const token = localStorage.getItem('token');
+        if (token) config.headers.Authorization = `Bearer ${token}`;
+        return config;
+    });
+
+    api.interceptors.response.use(
+        (response) => response,
+        (error) => {
+            if (error.response?.status === 401) {
+                localStorage.clear();
+                window.location.href = '/login';
+            }
+            return Promise.reject(error);
+        }
+    );
 });
