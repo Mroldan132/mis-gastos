@@ -85,7 +85,10 @@ export default function Dashboard() {
           setIngresosAgrupados([]);
         }
 
-        setMetasActivas(resMetas.data.Success ? (resMetas.data.Metas || []).filter(m => m.Estado !== "Completada").slice(0, 3) : []);
+        // Primero las del hogar (son de los dos), luego las personales
+        setMetasActivas(resMetas.data.Success
+          ? [...(resMetas.data.MetasHogar || []), ...(resMetas.data.Metas || [])].filter(m => m.Estado !== "Completada").slice(0, 3)
+          : []);
         setPresupuestos(resPres.data.Success ? resPres.data.Presupuestos : []);
         setFijos(resFijos.data.Success ? resFijos.data : null);
         setCuotas(resCuotas.data.Success ? resCuotas.data.Cuotas : []);
@@ -416,6 +419,7 @@ export default function Dashboard() {
                             <span className="flex min-w-0 items-center gap-2.5 text-sm text-ink">
                               <span className="text-base">{meta.Icono}</span>
                               <span className="truncate">{meta.Nombre}</span>
+                              {meta.EsCompartida && <span className="badge shrink-0 border-line text-faint">Hogar</span>}
                             </span>
                             <span className="text-sm text-muted num">{progreso.toFixed(0)}%</span>
                           </div>
