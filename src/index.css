@@ -16,11 +16,30 @@
   html {
     color-scheme: dark;
     -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
 
   body {
     @apply bg-canvas text-ink font-sans antialiased;
     overflow-x: hidden;
+    /* Sin la espera de doble toque para hacer zoom: los toques responden al instante */
+    touch-action: manipulation;
+  }
+
+  /* Instalada como app: sin "rebote" ni recarga al jalar hacia abajo, y sin menú al mantener presionado */
+  @media (display-mode: standalone) {
+    html,
+    body {
+      overscroll-behavior: none;
+    }
+    a,
+    button,
+    nav {
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
   }
 
   /* 16px en celular evita el zoom automático de iOS al enfocar un campo */

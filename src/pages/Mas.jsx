@@ -4,6 +4,7 @@ import Layout from '../components/Layout';
 import { apiGastos, BUZON_GASTOS } from '../services/api';
 import { Icon, PageHeader, PeriodPicker, Spinner } from '../components/ui';
 import { periodoActual, periodoTexto, exportarGastosCSV } from '../lib/format';
+import { useInstalacion } from '../lib/nativo';
 
 const secciones = [
   { path: '/ingresos', icon: 'wallet', titulo: 'Ingresos', descripcion: 'Sueldo y otros ingresos del mes' },
@@ -29,6 +30,33 @@ const direccionDeReenvio = () => {
   const [local, dominio] = BUZON_GASTOS.split('@');
   return `${local}+${alias}@${dominio}`;
 };
+
+// Instalar en la pantalla de inicio. Se oculta si ya está instalada o si el navegador no lo permite.
+function InstalarApp() {
+  const { instalada, puedeInstalar, esIOS, instalar } = useInstalacion();
+  if (instalada || (!puedeInstalar && !esIOS)) return null;
+
+  return (
+    <section className="card flex flex-col gap-4 p-5 animate-fade-up sm:flex-row sm:items-center">
+      <img src="/icon-192.png" alt="" className="h-14 w-14 shrink-0 rounded-2xl" />
+      <div className="min-w-0 flex-1">
+        <p className="font-medium text-ink">Instala HogarApp</p>
+        {puedeInstalar ? (
+          <p className="text-sm text-faint">Ábrela desde tu pantalla de inicio, a pantalla completa, como cualquier app.</p>
+        ) : (
+          <p className="text-sm text-faint">
+            En Safari toca <b className="text-muted">Compartir</b> (el cuadrado con la flecha) → <b className="text-muted">Agregar a inicio</b>.
+          </p>
+        )}
+      </div>
+      {puedeInstalar && (
+        <button onClick={instalar} className="btn-primary shrink-0">
+          <Icon name="download" size={18} /> Instalar
+        </button>
+      )}
+    </section>
+  );
+}
 
 function LecturaDeCorreos() {
   const direccion = direccionDeReenvio();
@@ -124,6 +152,8 @@ export default function Mas() {
             </Link>
           ))}
         </section>
+
+        <InstalarApp />
 
         <LecturaDeCorreos />
 

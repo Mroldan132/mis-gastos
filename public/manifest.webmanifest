@@ -1,0 +1,34 @@
+{
+  "id": "/",
+  "name": "HogarApp · Gastos del hogar",
+  "short_name": "HogarApp",
+  "description": "Gastos, presupuestos y metas del hogar, leídos de tus correos del banco.",
+  "lang": "es-PE",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#09090B",
+  "background_color": "#09090B",
+  "categories": ["finance", "productivity"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nuevo gasto",
+      "short_name": "Nuevo gasto",
+      "url": "/gastos?nuevo=1",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Gastos por revisar",
+      "short_name": "Por revisar",
+      "url": "/gastos?vista=revisar",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

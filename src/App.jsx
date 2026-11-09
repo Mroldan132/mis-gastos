@@ -9,11 +9,15 @@ import Plan from './pages/Plan';
 import Hogar from './pages/Hogar';
 import Mas from './pages/Mas';
 
+// Con la sesión abierta, la app (instalada o no) entra directo al resumen
+const Inicio = () => <Navigate to={localStorage.getItem('token') ? '/dashboard' : '/login'} replace />;
+
 function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/" element={<Inicio />} />
+        <Route path="*" element={<Inicio />} />
         <Route path="/login" element={<Login />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/gastos" element={<Gastos />} />

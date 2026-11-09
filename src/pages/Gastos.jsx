@@ -17,6 +17,7 @@ import {
   formatMonto, formatFecha, formatHora, periodoActual, periodoTexto, nombreMes, hoyISO,
   esReferencia, leidoPorIA, porRevisar, exportarGastosCSV,
 } from '../lib/format';
+import { vibrar } from '../lib/nativo';
 
 const COMPARTIDO_OPCIONES = [
   { value: 'auto', label: 'Según categoría' },
@@ -29,6 +30,7 @@ function EstadoBadge({ gasto }) {
   if (gasto.EsPagoDeCuota) return <span className="badge border-line text-faint"><Icon name="card" size={12} /> Cuota</span>;
   if (gasto.EsGastoReferencia) return <span className="badge border-line text-faint"><Icon name="split" size={12} /> Fraccionado</span>;
   if (porRevisar(gasto)) return <span className="badge border-accent/25 bg-accent/10 text-accent"><Icon name="sparkle" size={12} /> Por revisar</span>;
+  if (gasto.AutoConfirmado) return <span className="badge border-line text-muted"><Icon name="wand" size={12} /> Automático</span>;
   if (gasto.EsCompartido) return <span className="badge border-line text-muted"><Icon name="users" size={12} /> Compartido</span>;
   return null;
 }
@@ -168,6 +170,11 @@ export default function Gastos() {
     setIsModalOpen(true);
   };
 
+  // Acceso directo "Nuevo gasto" del ícono de la app instalada
+  useEffect(() => {
+    if (searchParams.get('nuevo') === '1') abrirNuevo();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const interpretarTexto = async () => {
     if (!textoRapido.trim()) return;
     setInterpretando(true);
@@ -266,6 +273,7 @@ export default function Gastos() {
     setErrorDetalle('');
     try {
       await guardarGasto(gastoDetalle, { Revisado: true });
+      vibrar();
       const siguiente = tipoVista === 'revisar' && !historial
         ? gastosFiltradosPorVista.find(g => g.FechaOperacion !== gastoDetalle.FechaOperacion && porRevisar(g))
         : null;
@@ -292,6 +300,7 @@ export default function Gastos() {
       }
     };
     await Promise.all(Array.from({ length: Math.min(4, lista.length) }, trabajador));
+    if (fallidos < lista.length) vibrar();
     if (fallidos) setErrorRevision(`No pudimos confirmar ${fallidos} ${fallidos === 1 ? 'gasto' : 'gastos'}. Intenta de nuevo.`);
   };
 
@@ -553,7 +562,10 @@ export default function Gastos() {
         ) : tipoVista === 'revisar' ? (
           <>
             <div className="flex flex-col gap-3 border-b border-line px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between md:px-5">
-              <p className="text-sm text-muted">Toca <Icon name="check" size={14} strokeWidth={2.25} className="inline text-accent" /> si está bien, o el gasto para corregirlo.</p>
+              <div>
+                <p className="text-sm text-muted">Toca <Icon name="check" size={14} strokeWidth={2.25} className="inline text-accent" /> si está bien, o el gasto para corregirlo.</p>
+                <p className="mt-0.5 text-xs text-faint">La app aprende: tras 3 confirmaciones de un comercio, los siguientes se confirman solos.</p>
+              </div>
               <button
                 onClick={() => aprobar(filasFiltradas.map(r => r.original))}
                 disabled={aprobando.size > 0}
@@ -634,6 +646,12 @@ export default function Gastos() {
               <div className="mb-4 flex items-start gap-3 rounded-xl border border-accent/20 bg-accent/[0.06] p-3.5 text-sm">
                 <Icon name="sparkle" size={16} className="mt-0.5 text-accent" />
                 <p className="text-muted">La IA leyó este gasto de un correo. Revisa que el monto y la categoría sean correctos.</p>
+              </div>
+            )}
+            {gastoDetalle.AutoConfirmado && (
+              <div className="mb-4 flex items-start gap-3 rounded-xl border border-line bg-white/[0.03] p-3.5 text-sm">
+                <Icon name="wand" size={16} className="mt-0.5 text-accent" />
+                <p className="text-muted">Se confirmó solo porque ya habías confirmado este comercio varias veces. Si algo está mal, edítalo y la app lo aprende.</p>
               </div>
             )}
 
