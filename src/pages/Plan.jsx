@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { apiPlan, mensajeDeError } from '../services/api';
-import { Icon, PageHeader, PeriodPicker, Segmented, Modal, Field, AmountInput, EmptyState, ListSkeleton, ProgressBar, Spinner, StatCard } from '../components/ui';
-import { formatMonto, formatFecha, periodoActual, periodoTexto, unirCategorias } from '../lib/format';
+import { Icon, PageHeader, PeriodPicker, Segmented, Modal, Field, AmountInput, EmptyState, ListSkeleton, ProgressBar, Spinner, StatCard, SelectCategoria } from '../components/ui';
+import { formatMonto, formatFecha, periodoActual, periodoTexto, } from '../lib/format';
 
 // Estado de un presupuesto: el color nunca va solo, siempre con ícono y texto
 const estadoPresupuesto = (p) => {
@@ -66,11 +66,6 @@ export default function Plan() {
   // Mientras llegan los datos del mes elegido se muestra la carga (los del mes anterior no sirven)
   const cargandoPresupuestos = !presupuestos || presupuestos.Mes !== mes;
   const cargandoFijos = !fijos || fijos.Mes !== mes;
-
-  const categorias = useMemo(() => unirCategorias(
-    (presupuestos?.Presupuestos ?? []).map(p => p.Categoria),
-    (presupuestos?.SinPresupuesto ?? []).map(p => p.Categoria),
-  ), [presupuestos]);
 
   // --- PRESUPUESTOS ---
   const abrirEditor = (categoriaNueva) => {
@@ -303,22 +298,17 @@ export default function Plan() {
         )
       )}
 
-      <datalist id="categorias-plan">
-        {categorias.map(c => <option key={c} value={c} />)}
-      </datalist>
-
       {/* --- EDITOR DE PRESUPUESTOS --- */}
       <Modal open={editorAbierto} onClose={() => setEditorAbierto(false)} title="Presupuestos" subtitle="Tope mensual por categoría. Se repite cada mes.">
         <form onSubmit={guardarPresupuestos} className="flex flex-col gap-4">
           <div className="flex flex-col gap-2.5">
             {filasEditor.map((fila, i) => (
               <div key={i} className="flex gap-2">
-                <input
-                  list="categorias-plan"
+                <SelectCategoria
                   value={fila.Categoria}
-                  onChange={(e) => setFilasEditor(filas => filas.map((f, j) => (j === i ? { ...f, Categoria: e.target.value } : f)))}
-                  placeholder="Categoría"
-                  className="input min-w-0 flex-1"
+                  onChange={(v) => setFilasEditor(filas => filas.map((f, j) => (j === i ? { ...f, Categoria: v } : f)))}
+                  excluir={filasEditor.filter((_, j) => j !== i).map(f => f.Categoria)}
+                  className="min-w-0 flex-1"
                 />
                 <div className="relative w-32 shrink-0">
                   <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-faint">S/</span>
@@ -363,7 +353,7 @@ export default function Plan() {
                 <input type="number" inputMode="numeric" min="1" max="31" value={fijoEditando.DiaVencimiento} onChange={(e) => setFijoEditando(f => ({ ...f, DiaVencimiento: e.target.value }))} className="input num" placeholder="1 – 31" required />
               </Field>
               <Field label="Categoría">
-                <input list="categorias-plan" value={fijoEditando.Categoria} onChange={(e) => setFijoEditando(f => ({ ...f, Categoria: e.target.value }))} className="input" required />
+                <SelectCategoria value={fijoEditando.Categoria} onChange={(v) => setFijoEditando(f => ({ ...f, Categoria: v }))} required />
               </Field>
             </div>
             {fijoEditando.FijoId && (

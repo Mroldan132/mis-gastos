@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { MESES, periodoActual } from '../lib/format';
+import { MESES, periodoActual, CATEGORIAS } from '../lib/format';
 
 // ====================================================
 // ÍCONOS (trazo de 1.75, estilo lineal)
@@ -18,6 +18,7 @@ const paths = {
   chevronLeft: <path d="m15 18-6-6 6-6" />,
   chevronRight: <path d="m9 18 6-6-6-6" />,
   check: <path d="M20 6 9 17l-5-5" />,
+  copy: <><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" /></>,
   edit: <><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" /></>,
   split: <><path d="M16 3h5v5M8 3H3v5" /><path d="M12 22v-8.3a4 4 0 0 0-1.17-2.83L3 3M21 3l-7.83 7.83" /></>,
   arrowUp: <path d="M7 17 17 7M8 7h9v9" />,
@@ -160,6 +161,19 @@ export function Field({ label, hint, children }) {
       {children}
       {hint && <span className="mt-1.5 block text-xs text-faint">{hint}</span>}
     </label>
+  );
+}
+
+// Lista de categorías del catálogo. Si el valor actual no está (p. ej. Ahorro de una meta), se muestra igual.
+export function SelectCategoria({ value, onChange, excluir = [], className = '', ...rest }) {
+  const opciones = CATEGORIAS.filter(c => c.nombre === value || !excluir.includes(c.nombre));
+  const fueraDelCatalogo = value && !CATEGORIAS.some(c => c.nombre === value);
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} className={`input ${className}`} {...rest}>
+      {!value && <option value="" disabled>Elige una categoría</option>}
+      {fueraDelCatalogo && <option value={value}>{value}</option>}
+      {opciones.map(c => <option key={c.nombre} value={c.nombre}>{c.nombre} · {c.descripcion}</option>)}
+    </select>
   );
 }
 

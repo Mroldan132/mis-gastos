@@ -11,11 +11,11 @@ import Layout from '../components/Layout';
 import { apiGastos, apiCuotas, mensajeDeError } from '../services/api';
 import {
   Icon, PageHeader, PeriodPicker, Segmented, Modal, Field, AmountInput, Avatar, EmptyState,
-  ListSkeleton, Pagination, Spinner,
+  ListSkeleton, Pagination, Spinner, SelectCategoria,
 } from '../components/ui';
 import {
   formatMonto, formatFecha, formatHora, periodoActual, periodoTexto, nombreMes, hoyISO,
-  unirCategorias, esReferencia, leidoPorIA, porRevisar, exportarGastosCSV,
+  esReferencia, leidoPorIA, porRevisar, exportarGastosCSV,
 } from '../lib/format';
 
 const COMPARTIDO_OPCIONES = [
@@ -38,6 +38,33 @@ function Monto({ gasto, className = '' }) {
     <span className={`font-medium num ${gasto.Moneda === 'USD' ? 'text-positive' : 'text-ink'} ${className}`}>
       {formatMonto(gasto.Monto, gasto.Moneda)}
     </span>
+  );
+}
+
+// Fila de la vista "Por revisar": tocar el gasto abre el detalle, el check lo confirma al toque
+function FilaRevision({ gasto, onAbrir, onAprobar, aprobando }) {
+  return (
+    <div className="flex items-center gap-2 py-1.5 pl-4 pr-3 md:pl-5 md:pr-4">
+      <button onClick={onAbrir} className="flex min-w-0 flex-1 items-center gap-3.5 rounded-xl py-2 text-left transition-colors active:bg-white/[0.04] md:hover:bg-white/[0.025]">
+        <Avatar text={gasto.Comercio} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[15px] font-medium text-ink">{gasto.Comercio}</p>
+          <p className="mt-0.5 truncate text-xs text-faint">
+            {gasto.Categoria} · {formatFecha(gasto.FechaOperacion)}{gasto.Banco ? ` · ${gasto.Banco}` : ''}
+          </p>
+        </div>
+        <Monto gasto={gasto} className="text-[15px]" />
+      </button>
+      <button
+        onClick={onAprobar}
+        disabled={aprobando}
+        aria-label={`Confirmar ${gasto.Comercio}`}
+        title="Está correcto"
+        className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-accent/30 bg-accent/10 text-accent transition-colors hover:bg-accent hover:text-canvas disabled:opacity-60"
+      >
+        {aprobando ? <Spinner /> : <Icon name="check" size={18} strokeWidth={2.25} />}
+      </button>
+    </div>
   );
 }
 
@@ -99,6 +126,10 @@ export default function Gastos() {
   const [guardandoDetalle, setGuardandoDetalle] = useState(false);
   const [errorDetalle, setErrorDetalle] = useState('');
 
+  // Revisión rápida de gastos leídos por la IA
+  const [aprobando, setAprobando] = useState(() => new Set());
+  const [errorRevision, setErrorRevision] = useState('');
+
   // Modal de fraccionar
   const [isFraccionarModalOpen, setIsFraccionarModalOpen] = useState(false);
   const [gastoSeleccionado, setGastoSeleccionado] = useState(null);
@@ -129,8 +160,6 @@ export default function Gastos() {
       .then(data => { if (data?.rates?.PEN) setTasaManual(data.rates.PEN); })
       .catch(err => console.error("Error obteniendo tipo de cambio:", err));
   }, [periodo]);
-
-  const categorias = useMemo(() => unirCategorias(gastos.map(g => g.Categoria)), [gastos]);
 
   // --- NUEVO GASTO ---
   const abrirNuevo = () => {
@@ -207,21 +236,63 @@ export default function Gastos() {
     setErrorDetalle('');
   };
 
-  // Aplica un cambio al gasto abierto y refresca la lista
+  // Guarda cambios de un gasto y lo reemplaza en las listas. Lanza el error si falla.
+  const guardarGasto = async (gasto, cambios) => {
+    const { data } = await apiGastos.put('/gastos', { FechaOperacion: gasto.FechaOperacion, ...cambios });
+    const reemplazar = (lista) => lista && lista.map(g => (g.FechaOperacion === data.Gasto.FechaOperacion ? data.Gasto : g));
+    setGastos(reemplazar);
+    setHistorial(reemplazar);
+    return data.Gasto;
+  };
+
+  // Aplica un cambio al gasto abierto en el detalle
   const actualizarGasto = async (cambios) => {
     setGuardandoDetalle(true);
     setErrorDetalle('');
     try {
-      const { data } = await apiGastos.put('/gastos', { FechaOperacion: gastoDetalle.FechaOperacion, ...cambios });
-      setGastoDetalle(data.Gasto);
+      const actualizado = await guardarGasto(gastoDetalle, cambios);
+      setGastoDetalle(actualizado);
       setModoDetalle('ver');
-      setGastos(lista => lista.map(g => (g.FechaOperacion === data.Gasto.FechaOperacion ? data.Gasto : g)));
-      setHistorial(lista => lista && lista.map(g => (g.FechaOperacion === data.Gasto.FechaOperacion ? data.Gasto : g)));
     } catch (error) {
       setErrorDetalle(mensajeDeError(error));
     } finally {
       setGuardandoDetalle(false);
     }
+  };
+
+  // Confirma el gasto abierto y, en la vista "Por revisar", pasa directo al siguiente
+  const confirmarYSeguir = async () => {
+    setGuardandoDetalle(true);
+    setErrorDetalle('');
+    try {
+      await guardarGasto(gastoDetalle, { Revisado: true });
+      const siguiente = tipoVista === 'revisar' && !historial
+        ? gastosFiltradosPorVista.find(g => g.FechaOperacion !== gastoDetalle.FechaOperacion && porRevisar(g))
+        : null;
+      if (siguiente) abrirDetalle(siguiente);
+      else cerrarDetalle();
+    } catch (error) {
+      setErrorDetalle(mensajeDeError(error));
+    } finally {
+      setGuardandoDetalle(false);
+    }
+  };
+
+  // Marca varios gastos como revisados (4 peticiones a la vez para no saturar la API)
+  const aprobar = async (lista) => {
+    setErrorRevision('');
+    setAprobando(actual => new Set([...actual, ...lista.map(g => g.FechaOperacion)]));
+    const cola = [...lista];
+    let fallidos = 0;
+    const trabajador = async () => {
+      while (cola.length) {
+        const gasto = cola.shift();
+        try { await guardarGasto(gasto, { Revisado: true }); } catch { fallidos++; }
+        setAprobando(actual => { const s = new Set(actual); s.delete(gasto.FechaOperacion); return s; });
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, lista.length) }, trabajador));
+    if (fallidos) setErrorRevision(`No pudimos confirmar ${fallidos} ${fallidos === 1 ? 'gasto' : 'gastos'}. Intenta de nuevo.`);
   };
 
   const guardarEdicion = (e) => {
@@ -479,6 +550,33 @@ export default function Gastos() {
             title={globalFilter ? 'Sin resultados este mes' : tipoVista === 'revisar' ? 'Todo revisado' : 'Sin gastos en este periodo'}
             description={globalFilter ? 'Prueba buscando en todo el historial.' : tipoVista === 'revisar' ? 'No quedan gastos de la IA por confirmar.' : 'Los gastos de tus correos aparecerán aquí automáticamente.'}
           />
+        ) : tipoVista === 'revisar' ? (
+          <>
+            <div className="flex flex-col gap-3 border-b border-line px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between md:px-5">
+              <p className="text-sm text-muted">Toca <Icon name="check" size={14} strokeWidth={2.25} className="inline text-accent" /> si está bien, o el gasto para corregirlo.</p>
+              <button
+                onClick={() => aprobar(filasFiltradas.map(r => r.original))}
+                disabled={aprobando.size > 0}
+                className="btn-primary h-10 shrink-0 px-4 text-sm"
+              >
+                {aprobando.size > 0 ? <Spinner /> : <Icon name="check" size={16} strokeWidth={2.25} />}
+                {filasFiltradas.length === 1 ? 'Confirmar' : `Confirmar los ${filasFiltradas.length}`}
+              </button>
+            </div>
+            {errorRevision && <p className="mx-4 mt-3 rounded-xl bg-negative/10 px-4 py-3 text-sm text-negative md:mx-5">{errorRevision}</p>}
+            <ul className="divide-y divide-line">
+              {filasFiltradas.map(row => (
+                <li key={row.id}>
+                  <FilaRevision
+                    gasto={row.original}
+                    onAbrir={() => abrirDetalle(row.original)}
+                    onAprobar={() => aprobar([row.original])}
+                    aprobando={aprobando.has(row.original.FechaOperacion)}
+                  />
+                </li>
+              ))}
+            </ul>
+          </>
         ) : (
           <>
             {/* Celular: lista */}
@@ -576,8 +674,9 @@ export default function Gastos() {
 
             <div className="flex flex-col gap-2.5">
               {porRevisar(gastoDetalle) && (
-                <button onClick={() => actualizarGasto({ Revisado: true })} disabled={guardandoDetalle} className="btn-primary h-12 w-full">
-                  {guardandoDetalle ? <Spinner /> : <Icon name="check" size={18} strokeWidth={2.25} />} Está correcto
+                <button onClick={confirmarYSeguir} disabled={guardandoDetalle} className="btn-primary h-12 w-full">
+                  {guardandoDetalle ? <Spinner /> : <Icon name="check" size={18} strokeWidth={2.25} />}
+                  {tipoVista === 'revisar' && conteo.revisar > 1 ? 'Está correcto · siguiente' : 'Está correcto'}
                 </button>
               )}
               <div className="grid grid-cols-2 gap-2.5">
@@ -612,8 +711,8 @@ export default function Gastos() {
             <Field label="Comercio">
               <input type="text" value={edicion.Comercio} onChange={(e) => setEdicion(s => ({ ...s, Comercio: e.target.value }))} className="input" required />
             </Field>
-            <Field label="Categoría" hint="Elige una de la lista o escribe una nueva.">
-              <input list="categorias-gasto" value={edicion.Categoria} onChange={(e) => setEdicion(s => ({ ...s, Categoria: e.target.value }))} className="input" required />
+            <Field label="Categoría">
+              <SelectCategoria value={edicion.Categoria} onChange={(v) => setEdicion(s => ({ ...s, Categoria: v }))} required />
             </Field>
             {errorDetalle && <p className="rounded-xl bg-negative/10 px-4 py-3 text-sm text-negative">{errorDetalle}</p>}
             <div className="grid grid-cols-2 gap-3">
@@ -640,10 +739,6 @@ export default function Gastos() {
           </>
         )}
       </Modal>
-
-      <datalist id="categorias-gasto">
-        {categorias.map(c => <option key={c} value={c} />)}
-      </datalist>
 
       {/* --- 2. NUEVO GASTO --- */}
       <Modal open={isModalOpen} onClose={() => setIsModalOpen(false)} title="Nuevo gasto" subtitle="Escríbelo como lo dirías o llena los campos.">
@@ -687,14 +782,13 @@ export default function Gastos() {
             <input type="text" value={nuevoComercio} onChange={(e) => setNuevoComercio(e.target.value)} className="input" placeholder="Ej. Supermercado" required />
           </Field>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Categoría">
-              <input list="categorias-gasto" value={nuevaCategoria} onChange={(e) => setNuevaCategoria(e.target.value)} className="input" required />
-            </Field>
-            <Field label="Fecha">
-              <input type="date" value={nuevaFecha} max={hoyISO()} onChange={(e) => setNuevaFecha(e.target.value)} className="input num" required />
-            </Field>
-          </div>
+          <Field label="Categoría">
+            <SelectCategoria value={nuevaCategoria} onChange={setNuevaCategoria} required />
+          </Field>
+
+          <Field label="Fecha">
+            <input type="date" value={nuevaFecha} max={hoyISO()} onChange={(e) => setNuevaFecha(e.target.value)} className="input num" required />
+          </Field>
 
           <div>
             <span className="label">En el hogar</span>

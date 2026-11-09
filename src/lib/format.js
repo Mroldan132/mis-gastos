@@ -50,11 +50,27 @@ export const hoyISO = () => {
 // GASTOS
 // ====================================================
 
-export const CATEGORIAS_BASE = ['Comida', 'Transporte', 'Servicios', 'Hogar', 'Entretenimiento', 'Salud', 'Tecnología', 'Educación', 'Ropa', 'Otros'];
-
-// La IA crea categorías libres: se combinan las base con las que realmente aparecen
-export const unirCategorias = (...listas) =>
-  [...new Set([...CATEGORIAS_BASE, ...listas.flat().filter(Boolean)])].filter(c => c !== 'Ahorro').sort((a, b) => a.localeCompare(b, 'es'));
+// Catálogo fijo de categorías: la IA solo puede elegir de aquí y la app no deja escribir otras.
+// Debe coincidir con Services/Categorias.cs del backend (LectorGastosLambda).
+export const CATEGORIAS = [
+  { nombre: 'Comida', descripcion: 'Restaurantes, delivery, cafés' },
+  { nombre: 'Supermercado', descripcion: 'Mercado, bodega, despensa' },
+  { nombre: 'Transporte', descripcion: 'Taxi, Uber, combustible, peajes' },
+  { nombre: 'Servicios', descripcion: 'Luz, agua, gas, internet, teléfono' },
+  { nombre: 'Hogar', descripcion: 'Alquiler, muebles, limpieza, reparaciones' },
+  { nombre: 'Salud', descripcion: 'Farmacia, médico, clínica, dentista' },
+  { nombre: 'Educación', descripcion: 'Colegio, cursos, libros, útiles' },
+  { nombre: 'Entretenimiento', descripcion: 'Cine, salidas, eventos, hobbies' },
+  { nombre: 'Suscripciones', descripcion: 'Netflix, Spotify, apps mensuales' },
+  { nombre: 'Ropa', descripcion: 'Ropa, calzado, accesorios' },
+  { nombre: 'Cuidado personal', descripcion: 'Peluquería, cosméticos, gimnasio' },
+  { nombre: 'Tecnología', descripcion: 'Equipos, accesorios, software' },
+  { nombre: 'Mascotas', descripcion: 'Veterinaria, alimento' },
+  { nombre: 'Viajes', descripcion: 'Vuelos, hoteles, hospedaje' },
+  { nombre: 'Regalos', descripcion: 'Regalos, donaciones, celebraciones' },
+  { nombre: 'Otros', descripcion: 'Lo que no encaje en ninguna' },
+];
+export const NOMBRES_CATEGORIAS = CATEGORIAS.map(c => c.nombre);
 
 export const esReferencia = (gasto) => gasto.EsGastoReferencia || gasto.EsPagoDeCuota;
 

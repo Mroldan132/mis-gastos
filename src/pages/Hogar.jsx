@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import { apiPlan, mensajeDeError } from '../services/api';
 import { Icon, PageHeader, PeriodPicker, Modal, EmptyState, ListSkeleton, Spinner, Avatar } from '../components/ui';
-import { formatMonto, formatFecha, periodoActual, periodoTexto, unirCategorias } from '../lib/format';
+import { formatMonto, formatFecha, periodoActual, periodoTexto, NOMBRES_CATEGORIAS } from '../lib/format';
 
 // Colores categóricos validados (los mismos del Resumen) para identificar a cada miembro
 const COLORES_MIEMBRO = ['#3987e5', '#d95926'];
@@ -41,8 +41,6 @@ export default function Hogar() {
 
   const miembros = datos?.Miembros ?? [];
   const colorDe = (userId) => COLORES_MIEMBRO[miembros.findIndex(m => m.UserId === userId) % COLORES_MIEMBRO.length];
-
-  const categoriasDisponibles = useMemo(() => unirCategorias(datos?.CategoriasDelMes ?? [], datos?.Configuracion?.CategoriasCompartidas ?? []), [datos]);
 
   const abrirConfig = () => {
     const c = datos.Configuracion;
@@ -260,7 +258,7 @@ export default function Hogar() {
             <span className="label">Categorías que son del hogar</span>
             <p className="mb-3 text-xs text-faint">Sus gastos cuentan como compartidos. Puedes cambiar cualquier gasto a mano desde Gastos.</p>
             <div className="flex flex-wrap gap-2">
-              {categoriasDisponibles.map(c => {
+              {NOMBRES_CATEGORIAS.map(c => {
                 const activa = compartidas.includes(c);
                 return (
                   <button

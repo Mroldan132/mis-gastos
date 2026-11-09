@@ -8,6 +8,9 @@ const API_CUOTAS_URL = 'https://m4ixixlyo9.execute-api.us-east-2.amazonaws.com';
 const API_METAS_URL = 'https://x3rfewotne.execute-api.us-east-2.amazonaws.com';
 const API_PLAN_URL = 'https://hxjbn8huck.execute-api.us-east-2.amazonaws.com'; // Presupuestos, pagos fijos y hogar
 
+// Cuenta de Gmail dedicada a la que cada usuario reenvía las notificaciones de su banco
+// (la misma que BUZON_EMAIL en la Lambda que lee los correos). Vacío = aún no configurada.
+export const BUZON_GASTOS = 'martinroldan408@gmail.com';
 
 // 2. Exportamos las instancias configuradas
 export const apiAuth = axios.create({ 
